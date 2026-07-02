@@ -1,0 +1,33 @@
+# =============================================================================
+# Terraform
+# =============================================================================
+
+# Local .terraform directories (providers, modules cache)
+**/.terraform/*
+
+# State files — NEVER commit. They can contain secrets and are the source of
+# truth in the remote backend, not git.
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Saved plans (may contain sensitive values)
+*.tfplan
+tfplan*
+
+# Provider CLI config / credentials
+.terraformrc
+terraform.rc
+
+# =============================================================================
+# What we DO commit (documented for clarity):
+#   - .terraform.lock.hcl  (pins provider versions — MUST be committed)
+#   - *.tf                 (all configuration)
+#   - terraform.tfvars     (env values here are non-secret: subscription id,
+#                           CIDRs, names. Real secrets come from Key Vault / OIDC.)
+# =============================================================================
+# If you ever put a secret in a tfvars, ignore it explicitly instead, e.g.:
+# secrets.auto.tfvars
