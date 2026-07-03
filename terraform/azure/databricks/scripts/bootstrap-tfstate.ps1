@@ -30,7 +30,9 @@
         nothing — not your CLI, not CI — can reach the backend).
 
 .PARAMETER Environment
-    dev | qa | prod | shared. Drives the resource names.
+    dev | qa | prod | shared | dev-lab. Drives the resource names.
+    dev-lab is the per-person cost-optimized lab (ADR-0006) — each teammate
+    runs this against their OWN subscription.
 
 .PARAMETER Location
     Azure region long name, e.g. eastus2.
@@ -83,7 +85,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('dev', 'qa', 'prod', 'shared')]
+    [ValidateSet('dev', 'qa', 'prod', 'shared', 'dev-lab')]
     [string]$Environment,
 
     [Parameter(Mandatory)]

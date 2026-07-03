@@ -1,6 +1,6 @@
-# ADR-0006: Cost-optimized `dev-lab` profile (design accepted, build deferred)
+# ADR-0006: Cost-optimized `dev-lab` profile
 
-- **Status:** Proposed (flips to Accepted when `environments/dev-lab/` is built)
+- **Status:** Accepted (2026-07-02 — `environments/dev-lab/` built per the design doc)
 - **Date:** 2026-07-01
 - **Deciders:** Platform (learning build)
 
@@ -43,9 +43,10 @@ always **available**, with strictly on-demand compute.
 - **Negative / trade-offs:** the lab's data plane traverses public endpoints
   (default-deny + allowlist, identity-gated) — explicitly NOT the client posture;
   per-user grants violate the groups rule until identity sync exists.
-- **Follow-ups:** build the lab per the design doc; flip this ADR to Accepted; move
-  grants to groups once Entra sync lands; revisit ADR-0002's remaining gaps for the
-  secure env (done separately).
+- **Follow-ups:** ~~build the lab per the design doc; flip this ADR to Accepted~~ (done
+  2026-07-02 — see `environments/dev-lab/README.md` for per-person setup); move grants
+  to groups once Entra sync lands; revisit ADR-0002's remaining gaps for the secure env
+  (done separately).
 
 ## References
 

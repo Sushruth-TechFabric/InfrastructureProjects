@@ -34,6 +34,51 @@ variable "soft_delete_retention_days" {
   default     = 7
 }
 
+# ---- Network exposure (ADR-0006) --------------------------------------------
+# Secure defaults: private-endpoint-only. Only lab profiles override these, and
+# even then "public" means reachable through a default-deny firewall with an
+# explicit allowlist. Secure roots pass nothing and their plans stay identical.
+
+variable "public_network_access_enabled" {
+  type        = bool
+  description = "Expose a public endpoint. Keep false (private-endpoint-only) outside lab profiles (ADR-0006)."
+  default     = false # secure default — existing roots unaffected
+}
+
+variable "network_default_action" {
+  type        = string
+  description = "Storage firewall default action when the public endpoint is enabled."
+  default     = "Deny"
+
+  validation {
+    condition     = contains(["Allow", "Deny"], var.network_default_action)
+    error_message = "network_default_action must be \"Allow\" or \"Deny\"."
+  }
+}
+
+variable "network_ip_rules" {
+  type        = list(string)
+  description = <<-EOT
+    Public IPs/CIDRs allowed through the storage firewall (only meaningful when
+    public_network_access_enabled = true). Azure rejects /31 and /32 CIDRs —
+    pass bare IPs (e.g. "203.0.113.10") or ranges /30 and larger.
+  EOT
+  default     = []
+}
+
+variable "network_resource_access_ids" {
+  type        = list(string)
+  description = <<-EOT
+    Azure resource IDs granted a resource-instance rule through the storage
+    firewall (e.g. a Databricks Access Connector). Required in the lab profile:
+    without VNet injection, cluster/serverless traffic arrives from Databricks
+    managed-VNet IPs that can never be allowlisted, so Unity Catalog access is
+    admitted per RESOURCE INSTANCE (the Access Connector identity) instead of
+    per IP. Empty in secure roots (traffic uses private endpoints).
+  EOT
+  default     = []
+}
+
 variable "tags" {
   type        = map(string)
   description = "Common tags applied to every resource."

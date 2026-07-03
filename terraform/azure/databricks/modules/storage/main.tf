@@ -1,15 +1,20 @@
 # =============================================================================
-# modules/storage — ADLS GEN2 DATA LAKE (hardened, private-only)
+# modules/storage — ADLS GEN2 DATA LAKE (hardened, private-only by default)
 # -----------------------------------------------------------------------------
 # ADLS Gen2 = a StorageV2 account with Hierarchical Namespace (HNS) enabled.
 # Security posture (all MUSTs from the architecture doc):
-#   - public network access OFF  -> reachable only via private endpoint
+#   - public network access OFF by default -> reachable only via private endpoint
 #   - HTTPS only + TLS 1.2 min
 #   - blob versioning + soft delete (recover from bad writes / deletes)
 #   - default network action Deny (belt-and-suspenders with public access off)
 # The private endpoint + Private DNS zone that make this account reachable are
 # created in the ENVIRONMENT ROOT, because they depend on the spoke subnet and
 # the shared-services DNS zones (cross-state glue, not a reusable blueprint).
+#
+# ADR-0006: lab profiles may flip public_network_access_enabled to true — even
+# then the firewall stays default-Deny with an explicit IP allowlist plus a
+# resource-instance rule for the Databricks Access Connector. Secure roots pass
+# none of the network vars and keep the exact posture above.
 # =============================================================================
 
 resource "azurerm_storage_account" "adls" {
@@ -23,17 +28,30 @@ resource "azurerm_storage_account" "adls" {
   is_hns_enabled           = true # <- this is what makes it ADLS Gen2 (Data Lake), not plain blob.
 
   # ---- Network hardening -------------------------------------------------
-  public_network_access_enabled   = false # no public endpoint at all
-  https_traffic_only_enabled      = true  # reject plain HTTP
+  public_network_access_enabled   = var.public_network_access_enabled # false unless a lab profile overrides (ADR-0006)
+  https_traffic_only_enabled      = true                              # reject plain HTTP
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false # no anonymous blob/container access
   shared_access_key_enabled       = true  # kept on for now; UC access is identity-based, not keys
 
-  # Default-deny firewall. With public access already off this is redundant, but
-  # it makes intent explicit and survives a future flip of public access.
+  # Default-deny firewall. With public access off this is redundant belt-and-
+  # suspenders; with public access on (lab) it is the control that makes
+  # "public" mean "reachable through an allowlist", not "open".
   network_rules {
-    default_action = "Deny"
+    default_action = var.network_default_action
     bypass         = ["AzureServices"]
+    ip_rules       = var.network_ip_rules
+
+    # Resource-instance rules: admit specific Azure resources (by identity, not
+    # IP) through the firewall — e.g. the Databricks Access Connector, whose
+    # compute traffic has no allowlistable IP in the lab's managed VNet.
+    dynamic "private_link_access" {
+      for_each = var.network_resource_access_ids
+
+      content {
+        endpoint_resource_id = private_link_access.value
+      }
+    }
   }
 
   # ---- Data protection ---------------------------------------------------

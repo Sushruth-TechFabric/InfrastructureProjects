@@ -43,8 +43,9 @@ provider "azurerm" {
 # token automatically. NOTE the ordering consequence: this provider can only
 # authenticate once the workspace EXISTS and your IP can reach it — on a fresh
 # subscription run a two-phase apply:
-#   terraform apply -target=module.databricks_workspace   # infra first
-#   terraform apply                                        # then workspace controls
+#   terraform apply "-target=module.databricks_workspace"   # infra first
+#   terraform apply                                          # then workspace controls
+# (keep the quotes around -target args — portable across shells)
 provider "databricks" {
   azure_workspace_resource_id = module.databricks_workspace.workspace_id
 }

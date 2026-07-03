@@ -14,8 +14,8 @@
 #
 # ORDERING / REACHABILITY CAVEATS (read before first apply):
 #   - These resources need the workspace to EXIST and be reachable from YOUR IP.
-#     Fresh deploy: `terraform apply -target=module.databricks_workspace`, then
-#     full `terraform apply`.
+#     Fresh deploy: `terraform apply "-target=module.databricks_workspace"` (keep
+#     the quotes — portable across shells), then full `terraform apply`.
 #   - Careful with the IP access list: if you apply it from an IP that is not in
 #     `allowed_ip_addresses`, you lock yourself (and Terraform) out. Your current
 #     egress IP MUST be in the list.

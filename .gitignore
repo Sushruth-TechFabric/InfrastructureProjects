@@ -31,3 +31,12 @@ terraform.rc
 # =============================================================================
 # If you ever put a secret in a tfvars, ignore it explicitly instead, e.g.:
 # secrets.auto.tfvars
+
+# =============================================================================
+# dev-lab (ADR-0006): per-person files — every teammate deploys the lab into
+# their OWN subscription, so these hold personal values (IPs, emails, names)
+# and must never be shared. Start from the committed *.example files.
+# (Other environments' terraform.tfvars stay committed, per the note above.)
+# =============================================================================
+terraform/azure/databricks/environments/dev-lab/terraform.tfvars
+terraform/azure/databricks/environments/dev-lab/backend.hcl

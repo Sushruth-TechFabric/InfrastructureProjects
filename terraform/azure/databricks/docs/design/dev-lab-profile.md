@@ -1,9 +1,14 @@
 # Design: `dev-lab` — Cost-Optimized Databricks Practice Environment
 
-> **Status: DESIGN ONLY — not yet implemented.** This document is the build spec for a
-> future `environments/dev-lab/` root. It exists so a later session (human or agent) can
-> implement it directly without re-deriving the decisions. Companion decision record:
-> [ADR-0006](../architecture/decisions/0006-cost-optimized-lab-profile.md) (Proposed).
+> **Status: IMPLEMENTED (2026-07-02)** in `environments/dev-lab/` — per-person setup
+> steps live in [`environments/dev-lab/README.md`](../../environments/dev-lab/README.md).
+> This document remains the build spec / rationale. Companion decision record:
+> [ADR-0006](../architecture/decisions/0006-cost-optimized-lab-profile.md) (Accepted).
+> Implementation deltas from §5: a 4th `catalog` filesystem + external location was
+> added because auto-provisioned metastores have no root storage (the `lab` catalog
+> needs its own `storage_root`), and the storage module additionally gained
+> `network_ip_rules` + `network_resource_access_ids` so Databricks compute reaches the
+> default-deny lake via an Access Connector resource-instance rule (identity, not IP).
 >
 > The **secure enterprise** build (`shared-services` + `environments/dev`) remains the
 > primary learning track and the architectural reference. This lab is a deliberate,

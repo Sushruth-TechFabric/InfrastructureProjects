@@ -19,6 +19,9 @@ import in `CLAUDE.md`.
 ## Repository layout
 - `modules/` — reusable blueprints, **no environment-specific values**.
 - `environments/{dev,qa,prod}/` — one root config + **one state file** each.
+- `environments/dev-lab/` — per-person cost-optimized practice lab (ADR-0006): no
+  hub/VNet-injection/private endpoints; every free control kept. A documented
+  exception to rules 5–6 below, scoped to that root only; setup in its README.
 - `shared-services/` — hub network, DNS, **UC metastore + Entra→account group sync**,
   deploy-once infra (own state). The metastore is account-level (one per region), so it
   lives here, not in an environment root.
