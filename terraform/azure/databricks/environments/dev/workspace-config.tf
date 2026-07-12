@@ -54,9 +54,13 @@ locals {
       "type" : "allowlist",
       "values" : local.policy_node_types
     },
-    # Pin to long-term-support runtimes.
+    # Restrict to long-term-support runtimes. "regex" (not "unlimited") is what
+    # actually enforces this — "unlimited" let users pick ANY runtime string
+    # (T12, 2026-07 review); defaultValue "auto:latest-lts" still satisfies the
+    # pattern (it contains "-lts"), so the default keeps working unchanged.
     "spark_version" : {
-      "type" : "unlimited",
+      "type" : "regex",
+      "pattern" : ".*-lts.*",
       "defaultValue" : "auto:latest-lts"
     }
   }
@@ -70,7 +74,17 @@ resource "databricks_cluster_policy" "personal" {
     "cluster_type" : { "type" : "fixed", "value" : "all-purpose" },
     "data_security_mode" : { "type" : "fixed", "value" : "SINGLE_USER" },
     "autoscale.min_workers" : { "type" : "range", "minValue" : 1, "maxValue" : 1, "defaultValue" : 1 },
-    "autoscale.max_workers" : { "type" : "range", "minValue" : 1, "maxValue" : 2, "defaultValue" : 1 }
+    "autoscale.max_workers" : { "type" : "range", "minValue" : 1, "maxValue" : 2, "defaultValue" : 1 },
+    # T12: without this, a user can request a FIXED-size cluster (num_workers)
+    # and bypass the autoscale.* bounds above entirely. maxValue mirrors
+    # autoscale.max_workers' maxValue so a fixed-size cluster obeys the same cap.
+    # isOptional=true: a "range" constraint is otherwise treated as a required
+    # attribute, which would force every cluster-create request to also supply
+    # num_workers alongside the (required) autoscale.* fields above — but
+    # num_workers/autoscale are mutually exclusive in the Clusters API. Optional
+    # keeps autoscale-only creation the unconstrained default path while still
+    # bounding num_workers IF a caller supplies it instead.
+    "num_workers" : { "type" : "range", "minValue" : 0, "maxValue" : 2, "isOptional" : true }
   }))
 }
 
@@ -82,7 +96,11 @@ resource "databricks_cluster_policy" "jobs" {
     "cluster_type" : { "type" : "fixed", "value" : "job" },
     "data_security_mode" : { "type" : "fixed", "value" : "SINGLE_USER" },
     "autoscale.min_workers" : { "type" : "range", "minValue" : 1, "maxValue" : 2, "defaultValue" : 1 },
-    "autoscale.max_workers" : { "type" : "range", "minValue" : 1, "maxValue" : var.policy_max_workers, "defaultValue" : 2 }
+    "autoscale.max_workers" : { "type" : "range", "minValue" : 1, "maxValue" : var.policy_max_workers, "defaultValue" : 2 },
+    # T12: caps fixed-size (non-autoscale) clusters to the same ceiling as
+    # autoscale.max_workers above. isOptional=true: see the "personal" policy
+    # above for why (num_workers/autoscale are mutually exclusive in the API).
+    "num_workers" : { "type" : "range", "minValue" : 0, "maxValue" : var.policy_max_workers, "isOptional" : true }
   }))
 }
 
@@ -94,7 +112,11 @@ resource "databricks_cluster_policy" "shared" {
     "cluster_type" : { "type" : "fixed", "value" : "all-purpose" },
     "data_security_mode" : { "type" : "fixed", "value" : "USER_ISOLATION" },
     "autoscale.min_workers" : { "type" : "range", "minValue" : 1, "maxValue" : 2, "defaultValue" : 1 },
-    "autoscale.max_workers" : { "type" : "range", "minValue" : 1, "maxValue" : var.policy_max_workers, "defaultValue" : 2 }
+    "autoscale.max_workers" : { "type" : "range", "minValue" : 1, "maxValue" : var.policy_max_workers, "defaultValue" : 2 },
+    # T12: caps fixed-size (non-autoscale) clusters to the same ceiling as
+    # autoscale.max_workers above. isOptional=true: see the "personal" policy
+    # above for why (num_workers/autoscale are mutually exclusive in the API).
+    "num_workers" : { "type" : "range", "minValue" : 0, "maxValue" : var.policy_max_workers, "isOptional" : true }
   }))
 }
 
