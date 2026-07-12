@@ -147,6 +147,9 @@ lakebase_can_use        = ["users", "bi_users"]
 # Preserves the previous hardcoded behavior (clean teardown, no lingering storage).
 lakebase_purge_on_delete = true
 
+# ---- Serverless NCC private-endpoint approval (ADR-0012) ---------------------
+# ncc_approval_enabled = true  # flip after the first full apply (two-phase, ADR-0012)
+
 # ---- Tags (required set on every resource) ----------------------------------
 tags = {
   Environment = "dev"
