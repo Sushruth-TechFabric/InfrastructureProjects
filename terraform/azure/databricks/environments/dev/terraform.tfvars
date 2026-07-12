@@ -138,6 +138,9 @@ lakebase_stopped        = false
 lakebase_can_manage     = ["engineers"]
 lakebase_can_use        = ["users", "bi_users"]
 
+# ---- Serverless NCC private-endpoint approval (ADR-0012) ---------------------
+# ncc_approval_enabled = true  # flip after the first full apply (two-phase, ADR-0012)
+
 # ---- Tags (required set on every resource) ----------------------------------
 tags = {
   Environment = "dev"
