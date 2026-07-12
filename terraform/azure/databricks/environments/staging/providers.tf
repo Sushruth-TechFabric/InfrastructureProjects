@@ -46,10 +46,11 @@ terraform {
 
 provider "azurerm" {
   features {
-    # Let `terraform destroy` remove the Key Vault even with purge protection on
-    # (dev convenience). In prod you would leave this false.
+    # Let `terraform destroy` remove the Key Vault even with purge protection on.
+    # Driven by var.kv_purge_on_destroy (default false); dev's tfvars opts in as
+    # a dev convenience. Leave false in staging/prod.
     key_vault {
-      purge_soft_delete_on_destroy = true
+      purge_soft_delete_on_destroy = var.kv_purge_on_destroy
     }
   }
 

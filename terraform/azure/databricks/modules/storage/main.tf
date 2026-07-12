@@ -23,7 +23,7 @@ resource "azurerm_storage_account" "adls" {
   location            = var.location
 
   account_tier             = "Standard"
-  account_replication_type = "LRS" # dev: local redundancy. Prod would revisit (ZRS/GZRS) — see resilience deferral.
+  account_replication_type = var.account_replication_type
   account_kind             = "StorageV2"
   is_hns_enabled           = true # <- this is what makes it ADLS Gen2 (Data Lake), not plain blob.
 
@@ -32,7 +32,7 @@ resource "azurerm_storage_account" "adls" {
   https_traffic_only_enabled      = true                              # reject plain HTTP
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false # no anonymous blob/container access
-  shared_access_key_enabled       = true  # kept on for now; UC access is identity-based, not keys
+  shared_access_key_enabled       = var.shared_access_key_enabled
 
   # Default-deny firewall. With public access off this is redundant belt-and-
   # suspenders; with public access on (lab) it is the control that makes

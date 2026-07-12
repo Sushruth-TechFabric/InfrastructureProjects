@@ -43,6 +43,16 @@ variable "location" {
   default     = "westus3"
 }
 
+variable "kv_purge_on_destroy" {
+  type        = bool
+  description = <<-EOT
+    Let `terraform destroy` remove the Key Vault even with purge protection on.
+    Default false (leave the vault soft-deleted, recoverable). Dev's tfvars sets
+    this true as a dev convenience; leave false in staging/prod.
+  EOT
+  default     = false
+}
+
 variable "region_abbrev" {
   type        = string
   description = "Short region token used in resource names (e.g. wus3)."
@@ -199,6 +209,14 @@ variable "identity_groups" {
   validation {
     condition     = contains(keys(var.identity_groups), "admins")
     error_message = "identity_groups must include an \"admins\" key — uc.tf's local.uc_owner pins every UC object's owner to it (rule 10: groups, not individuals)."
+  }
+
+  validation {
+    # Defensive lookup/try so the contains() check above is the one that fires
+    # when "admins" is missing entirely — this one only guards the case where
+    # the key exists but nobody is in it.
+    condition     = length(try(var.identity_groups["admins"].members, [])) > 0
+    error_message = "identity_groups[\"admins\"] must have at least one member — with members = [], nobody can administer UC objects (local.uc_owner pins ownership to this group)."
   }
 }
 

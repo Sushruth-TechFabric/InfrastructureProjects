@@ -12,6 +12,9 @@ location      = "westus3"
 region_abbrev = "wus3"
 instance      = "001"
 
+# dev convenience; leave false in staging/prod
+kv_purge_on_destroy = true
+
 # ---- Hub (shared-services) lookups — must match what shared-services created --
 # NAT-egress mode (ADR-0007): only the DNS-zone resource group is needed.
 hub_resource_group_name = "rg-networking-dbx-shared-wus3-001"
@@ -137,6 +140,8 @@ lakebase_retention_days = 2
 lakebase_stopped        = false
 lakebase_can_manage     = ["engineers"]
 lakebase_can_use        = ["users", "bi_users"]
+# Preserves the previous hardcoded behavior (clean teardown, no lingering storage).
+lakebase_purge_on_delete = true
 
 # ---- Tags (required set on every resource) ----------------------------------
 tags = {

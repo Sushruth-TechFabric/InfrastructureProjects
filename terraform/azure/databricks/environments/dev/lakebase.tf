@@ -74,8 +74,11 @@ variable "lakebase_can_manage" {
     identity_groups keys granted CAN_MANAGE on the Lakebase instance (admin:
     settings, roles, delete). Grants go to GROUPS only. Empty list = admins only.
     AUTHORITATIVE: UI-added grants not listed here are reverted on the next apply.
+    Default [] so this validates cleanly even when lakebase_enabled = false and
+    a client's identity_groups doesn't define an "engineers" key; dev sets its
+    real list explicitly in terraform.tfvars.
   EOT
-  default     = ["engineers"]
+  default     = []
 
   validation {
     condition = alltrue([
@@ -90,8 +93,11 @@ variable "lakebase_can_use" {
   description = <<-EOT
     identity_groups keys granted CAN_USE on the Lakebase instance (connect and
     run SQL). Grants go to GROUPS only. Empty list = admins only. AUTHORITATIVE.
+    Default [] so this validates cleanly even when lakebase_enabled = false and
+    a client's identity_groups doesn't define "users"/"bi_users" keys; dev sets
+    its real list explicitly in terraform.tfvars.
   EOT
-  default     = ["users", "bi_users"]
+  default     = []
 
   validation {
     condition = alltrue([
@@ -109,6 +115,16 @@ variable "lakebase_can_use" {
   }
 }
 
+variable "lakebase_purge_on_delete" {
+  type        = bool
+  description = <<-EOT
+    Purge the Lakebase instance's underlying storage on delete (clean teardown,
+    no lingering storage/cost). Default false (safer — leaves storage recoverable);
+    dev's tfvars sets this true to preserve its existing clean-teardown behavior.
+  EOT
+  default     = false
+}
+
 # Lakebase managed Postgres instance. count gates the whole feature on the
 # lakebase_enabled toggle (opt-in per environment). custom_tags is a list of
 # {key,value} objects (not a map), so project the common tag map into that shape.
@@ -122,7 +138,7 @@ resource "databricks_database_instance" "dev" {
   enable_pg_native_login      = false # SECRETLESS: OAuth/Databricks identity only, no PG passwords
   retention_window_in_days    = var.lakebase_retention_days
   stopped                     = var.lakebase_stopped
-  purge_on_delete             = true # dev: clean teardown, no lingering storage
+  purge_on_delete             = var.lakebase_purge_on_delete
 
   custom_tags = [for k, v in local.common_tags : { key = k, value = v }]
 }
