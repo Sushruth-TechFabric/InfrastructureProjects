@@ -10,18 +10,18 @@ while implementing it, so future work (human or AI agent) has the reasoning as c
 
 | ADR | Title | Status |
 | --- | --- | --- |
-| [0001](0001-minimal-shared-services-and-cross-state-data-sources.md) | Minimal shared-services + cross-state via Azure data sources | Accepted (partially superseded by 0007) |
-| [0002](0002-infra-layer-first-defer-databricks-provider.md) | Infra layer first; defer the databricks provider | Accepted |
+| [0001](0001-minimal-shared-services-and-cross-state-data-sources.md) | Minimal shared-services + cross-state via Azure data sources | Accepted (partially superseded by 0007 and 0008) |
+| [0002](0002-infra-layer-first-defer-databricks-provider.md) | Infra layer first; defer the databricks provider | Accepted (follow-ups landed — cluster policies + secret scope, UC per 0011; the IP access list follow-up superseded by 0010) |
 | [0003](0003-module-vs-root-boundary.md) | Module vs. environment-root boundary | Accepted |
 | [0004](0004-nat-gateway-on-firewall-subnet-non-zonal.md) | NAT Gateway on the firewall subnet (non-zonal firewall) | Accepted (dormant — see 0007) |
 | [0005](0005-version-pinning-and-naming-tagging.md) | Version pinning, naming, and tagging conventions | Accepted |
 | [0006](0006-cost-optimized-lab-profile.md) | Cost-optimized dev-lab profile | Accepted (IP access list clause superseded by 0010) |
-| [0007](0007-nat-gateway-nsg-egress-for-dev.md) | NAT Gateway + NSG egress for dev; Azure Firewall optional | Accepted |
+| [0007](0007-nat-gateway-nsg-egress-for-dev.md) | NAT Gateway + NSG egress for dev; Azure Firewall optional | Accepted ("IP access lists" in the keep-list removed by 0010) |
 | [0008](0008-aim-identity-layer.md) | Identity layer — Entra groups + AIM sync, owned by the environment root | Accepted |
 | [0009](0009-workspace-object-permissions-in-root.md) | Workspace-object permissions — tfvars grant matrix, owned by the environment root | Accepted |
 | [0010](0010-remove-workspace-ip-access-lists.md) | Remove workspace front-end IP access lists (Entra ID-only gating) | Accepted |
 | [0011](0011-account-metastore-in-shared-services.md) | Account-level UC metastore in shared-services; catalog-level managed storage | Accepted |
-| [0012](0012-serverless-network-connectivity.md) | Serverless private connectivity (NCC) owned by the environment root | Accepted |
+| [0012](0012-serverless-network-connectivity.md) | Serverless private connectivity (NCC) owned by the environment root | Accepted (erratum: dev's secret scope is KV-backed, not Databricks-backed — see amendment in the ADR) |
 | [0013](0013-lakebase-dev-oltp.md) | Lakebase (managed Postgres / OLTP) in dev | Accepted |
 | [0014](0014-local-module-paths.md) | Local module paths in the monorepo | Accepted |
 

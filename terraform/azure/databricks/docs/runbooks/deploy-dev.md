@@ -28,12 +28,15 @@ self-contained Terraform root with **its own state file**. Within each root:
 | `backend.tf` | Where state lives — an Azure Storage blob, authenticated via your Entra identity (`use_azuread_auth = true`), no storage keys. Partial config (empty `backend "azurerm" {}`); the actual resource group / storage account / container / key come from a gitignored `backend.hcl` (copy from the committed `backend.hcl.example`) passed at `init` time — see Step 1. |
 | `providers.tf` | Pins Terraform + provider versions; configures `azurerm` (Azure resources) and, in dev, `databricks` (workspace-level settings), `databricks.account` (account-level: identity ADR-0008, UC ADR-0011, serverless NCC ADR-0012), `azuread` (Entra groups) and `azapi` (approve the inbound serverless PE connections, ADR-0012). shared-services also carries `databricks.account` for the metastore. |
 | `network-connectivity.tf` (dev) | Serverless private connectivity (ADR-0012): the account-level Network Connectivity Config + private endpoint rules (blob/dfs/vault) + workspace binding, and the azapi approval of the Databricks-raised connections. Two-phase apply (Step 4b). |
-| `uc.tf` | Unity Catalog (ADR-0011). shared-services: the account-level **metastore** (one per region, import-or-create). dev: metastore **assignment** (by-name lookup) + **storage credential** + `catalog` **external location** — everything a future catalog needs. |
+| `uc.tf` | Unity Catalog (ADR-0011). shared-services: the account-level **metastore** (one per region, import-or-create). dev: metastore **assignment** (by-name lookup) + **storage credential** + the **external locations** (`catalog` plus one per medallion layer) that `catalogs.tf` builds on. |
+| `catalogs.tf` (dev) | UC catalogs / schemas / grants **as config**: driven entirely by the `catalogs` / `catalog_grants` / `schema_grants` tfvars maps (group-based, ADR-0009). Add or remove by re-applying. |
 | `variables.tf` | Declares inputs (types, descriptions) — no values. |
 | `terraform.tfvars` | The **only place the environment's concrete values live**: subscription id, CIDRs, names, tags. Non-secret by design. |
 | `main.tf` | Instantiates the reusable modules and does cross-boundary glue: hub DNS-zone lookups, DNS zone links, private endpoints, RBAC. |
 | `workspace-config.tf` (dev) | "Pass 2" — controls *inside* the workspace: cluster policies, Key Vault-backed secret scope. |
 | `workspace-permissions.tf` (dev) | Grants on those workspace objects (ADR-0009): which identity groups may CAN_USE each cluster policy and READ the secret scope, driven by the tfvars matrix. |
+| `sql-warehouse.tf` (dev) | Classic SQL warehouse (2X-Small, PRO, aggressive auto-stop — the dev cost posture) + its CAN_USE grants from `sql_warehouse_can_use`. |
+| `lakebase.tf` (dev) | Lakebase managed Postgres (ADR-0013), **opt-in** via `lakebase_enabled` (creates nothing when `false`): the database instance + its group grants (Step 4c). |
 | `outputs.tf` | Values printed after apply (names, IPs, workspace URL). |
 
 `modules/` (networking, storage, key-vault, identity, databricks-workspace) are
@@ -80,9 +83,10 @@ either:
 3. Confirm the identity you `az login` with is a Databricks **account admin**
    (account console → User management) — a workspace admin is not enough — and
    can create Entra groups in the tenant.
-4. If a group named `grp-dbx-dev-admins` / `grp-dbx-dev-users` already exists
-   in Entra, `terraform import` it first — the apply otherwise fails on the
-   duplicate-name guard (by design; it never silently creates a duplicate).
+4. If a group named `grp-dbx-dev-<role>` (admins / users / engineers /
+   bi_users) already exists in Entra, `terraform import` it first — the apply
+   otherwise fails on the duplicate-name guard (by design; it never silently
+   creates a duplicate).
 
 ## Step 1 — Bootstrap the state backends (once per boundary, likely already done)
 
@@ -238,8 +242,9 @@ Pass 2 also applies the **identity layer** (`module.workspace_access`,
 ADR-0008): per group in `identity_groups`, an Entra group (authoritative
 membership — the tfvars list IS the group), a thin Databricks account "shell"
 linked by `external_id`, and the workspace permission assignment
-(ADMIN/USER). Expected adds with the default two groups: 2 `azuread_group`,
-2 `databricks_group`, 2 `databricks_mws_permission_assignment`. Membership
+(ADMIN/USER). Expected adds with the default four groups (admins / users /
+engineers / bi_users): 4 `azuread_group`, 4 `databricks_group`,
+4 `databricks_mws_permission_assignment`. Membership
 itself is synced by AIM at auth time (≤5 min browser login / ≤40 min
 token-job auth) — no member resources appear in the plan, by design. If an
 assignment fails with `Principal not in workspace` (provider issue #5367,
@@ -253,13 +258,26 @@ owner can only be set now that the group is real.
 Pass 2 also enables **Unity Catalog** (`uc.tf`, ADR-0011): the metastore
 assignment (add — or no-op if imported above), the storage credential
 `sc-dbx-dev-wus3-001` wrapping the Access Connector identity, and the external
-location `loc-catalog-dbx-dev-wus3-001` for the future catalog's managed
-storage. `skip_validation = true` on the location is deliberate: the storage
+locations — `loc-catalog-dbx-dev-wus3-001` for the catalog's managed storage
+plus one per medallion layer (bronze/silver/gold), each workspace-bound.
+`skip_validation = true` on the locations is deliberate: the storage
 account is sealed (public access off) and UC's create-time probe comes from the
 Databricks control plane; real access flows through the VNet private endpoints
 at first cluster use. If the credential apply 403s, that is RBAC propagation
-lag on the blob-contributor grant — re-run `terraform apply`, it converges. No
-catalogs/schemas/grants yet — a future pass, group-based per ADR-0009.
+lag on the blob-contributor grant — re-run `terraform apply`, it converges.
+
+Catalogs, schemas, and UC grants are **tfvars-driven config** (`catalogs.tf`,
+group-based per ADR-0009 — never individuals). With the default dev tfvars,
+expect: 1 `databricks_catalog` (`dbx_dev`, managed storage on the `catalog`
+container) + its workspace binding, 3 `databricks_schema` (bronze/silver/gold,
+one per layer container), 1 catalog-level and 3 schema-level
+`databricks_grants` from the `catalog_grants`/`schema_grants` matrices.
+
+Pass 2 also creates the **SQL warehouse** (`sql-warehouse.tf`): 1
+`databricks_sql_endpoint` (2X-Small, PRO, 10-min auto-stop — the dev cost
+posture) and 1 `databricks_permissions` granting CAN_USE per
+`sql_warehouse_can_use` (engineers and bi_users in the default dev tfvars;
+admins implicit). Lakebase is separate and opt-in — Step 4c.
 
 On top of the identity layer, pass 2 wires the **workspace-object permissions**
 (`workspace-permissions.tf`, ADR-0009). Expected adds with the default dev
@@ -359,7 +377,8 @@ pause the instance (storage-only billing); flip back to `false` to resume.
 terraform output          # workspace URL, resource names
 ```
 
-Open the workspace URL from an allowed IP; log in with Entra ID. Launch a
+Open the workspace URL and log in with Entra ID — the front end is
+internet-reachable and Entra-gated, no IP allowlist (ADR-0010). Launch a
 policy-governed cluster — if it hangs at startup, the first suspect is the NSG
 egress allowlist (`nat_egress_allow_rules` in `modules/networking/main.tf`):
 reconcile it against the current region-specific Databricks endpoint list on
@@ -369,11 +388,11 @@ Microsoft Learn. (In firewall mode the same suspect is the firewall policy's
 **Identity layer (ADR-0008):**
 
 - **Idempotency:** immediately re-run `terraform plan` — it must be empty.
-- In the account console both groups show source "Microsoft Entra ID", list
+- In the account console all four groups show source "Microsoft Entra ID", list
   the workspace under Workspaces, and membership editing is blocked
   (read-only — AIM owns it).
-- **Access:** a `users`-group member from an allowed IP reaches the workspace
-  without admin settings; an `admins`-group member sees admin settings.
+- **Access:** a `users`-group member reaches the workspace without admin
+  settings; an `admins`-group member sees admin settings.
 - **Revocation:** remove a test UPN from `identity_groups` → apply → the user
   leaves the Entra group immediately; workspace access ends within the AIM
   refresh window (≤5/40 min) plus any residual session. Their account-console
@@ -388,7 +407,8 @@ Microsoft Learn. (In firewall mode the same suspect is the firewall policy's
   present).
 - `databricks storage-credentials list` shows `sc-dbx-dev-wus3-001`;
   `databricks external-locations list` shows `loc-catalog-dbx-dev-wus3-001`
-  (run against the workspace host).
+  plus `loc-{bronze,silver,gold}-dbx-dev-wus3-001` (run against the workspace
+  host).
 - **Idempotency:** re-run `terraform plan` — empty.
 - Readiness, not proof-of-access: actual reads/writes through the credential
   are exercised when the first catalog + cluster use it (the control plane

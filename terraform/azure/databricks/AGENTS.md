@@ -14,7 +14,9 @@ import in `CLAUDE.md`.
 - Terraform (azurerm + databricks providers), remote state in Azure Storage.
 - Azure: hub-spoke networking, Databricks (VNet injection), ADLS Gen2, Key Vault,
   Unity Catalog, Entra ID.
-- CI/CD: GitHub Actions with OIDC (no stored secrets).
+- CI/CD (planned): GitHub Actions with OIDC (no stored secrets). The workflows
+  don't exist yet (`.github/workflows/` is empty) — until they do, applies
+  follow `docs/runbooks/deploy-dev.md`.
 
 ## Repository layout
 - `modules/` — reusable blueprints, **no environment-specific values**.
@@ -55,8 +57,10 @@ import in `CLAUDE.md`.
    Governance via Unity Catalog; secrets only via Key Vault-backed scopes.
 8. **Cluster policies** force VNet injection + SCC on every cluster; harden the
    workspace to least functionality.
-9. **Identity:** user-assigned managed identities by default. CI/CD authenticates
-   via a **federated (OIDC) credential** scoped to this repo + branch — no secrets.
+9. **Identity:** user-assigned managed identities by default. CI/CD (planned)
+   authenticates via a **federated (OIDC) credential** scoped to this repo +
+   GitHub **environment** (the approval-gate design) — no secrets. Until CI
+   exists, applies follow the runbook.
 10. **RBAC:** narrowest scope, most specific built-in role (not `Contributor`/
     `Owner`), assign to **groups** not individuals. Automation principals never get
     `Owner`. All assignments in Terraform.

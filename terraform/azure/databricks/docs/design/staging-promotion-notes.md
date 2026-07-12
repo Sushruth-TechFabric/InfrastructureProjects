@@ -1,17 +1,20 @@
-# Staging promotion notes (E7, 2026-07-10 review)
+# Staging promotion notes (E7 — promote environments by verbatim copy; 2026-07-10 review)
 
 The design claim in `docs/architecture/azure-platform-architecture.md` is that
 promoting dev to a new environment is **a `terraform.tfvars` change, not a code
 change**. This was untested — `environments/staging/*.tf` were 0-byte stubs.
 This note records what it took to make that claim true, as the remaining
-portability debt list the review asked for.
+portability debt list the review asked for. (The 2026-07-10 review was a
+working-session review never committed to `docs/reviews/`; its finding IDs are
+kept for traceability and glossed inline wherever cited.)
 
 ## What was copied verbatim
 
 Every `.tf` file in `environments/staging/` is a byte-for-byte copy of the
 corresponding file in `environments/dev/` at the time of this pass (after the
 2026-07-10 remediation fixes below), except `backend.tf` (state key differs —
-same partial-config pattern, see E1) and the `.terraform.lock.hcl` (copied
+same partial-config pattern, see E1 below: no hardcoded backend values) and the
+`.terraform.lock.hcl` (copied
 as-is; identical provider set):
 
 `providers.tf`, `variables.tf`, `main.tf`, `uc.tf`, `catalogs.tf`,
