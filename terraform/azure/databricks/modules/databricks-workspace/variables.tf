@@ -4,7 +4,7 @@
 
 variable "resource_group_name" {
   type        = string
-  description = "Resource group that holds the workspace resource (e.g. rg-databricks-dev-eus2-001)."
+  description = "Resource group that holds the workspace resource (e.g. rg-databricks-dbx-dev-eus2-001)."
 }
 
 variable "location" {

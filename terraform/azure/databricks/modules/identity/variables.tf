@@ -4,7 +4,7 @@
 
 variable "resource_group_name" {
   type        = string
-  description = "Resource group for the identity + access connector (e.g. rg-security-dev-eus2-001)."
+  description = "Resource group for the identity + access connector (e.g. rg-security-dbx-dev-eus2-001)."
 }
 
 variable "location" {
@@ -14,7 +14,7 @@ variable "location" {
 
 variable "user_assigned_identity_name" {
   type        = string
-  description = "User-assigned managed identity name (e.g. id-dbx-connector-dev-eus2-001)."
+  description = "User-assigned managed identity name (e.g. id-connector-dbx-dev-eus2-001)."
 }
 
 variable "access_connector_name" {

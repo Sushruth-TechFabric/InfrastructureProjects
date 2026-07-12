@@ -10,6 +10,22 @@ variable "subscription_id" {
   description = "YOUR Azure subscription GUID (the lab deploys entirely into it)."
 }
 
+variable "project" {
+  type        = string
+  description = <<-EOT
+    Short project/workload token used in every resource name (the {project}
+    slot of the naming convention). Keep it 2-8 lowercase alphanumerics —
+    Key Vault (<=24 chars) and storage-account (<=24, alnum only) names are
+    the binding length constraints.
+  EOT
+  default     = "dbx"
+
+  validation {
+    condition     = can(regex("^[a-z0-9]{2,8}$", var.project))
+    error_message = "project must be 2-8 lowercase letters/digits (it is embedded in length-limited Azure names)."
+  }
+}
+
 variable "environment" {
   type        = string
   description = "Deployment environment token used in resource names."
@@ -43,7 +59,7 @@ variable "instance" {
 
 variable "storage_account_name" {
   type        = string
-  description = "ADLS Gen2 account name — GLOBALLY unique across Azure, so every teammate must pick their own (e.g. stdbxlab<initials>wus3)."
+  description = "ADLS Gen2 account name — GLOBALLY unique across Azure, so every teammate must pick their own (convention st{project}lab<initials>{region}, e.g. stdbxlab<initials>wus3)."
 
   validation {
     condition     = can(regex("^[a-z0-9]{3,24}$", var.storage_account_name))
@@ -51,15 +67,16 @@ variable "storage_account_name" {
   }
 }
 
-# ---- Front-end + firewall allowlist ------------------------------------------
+# ---- Storage/Key Vault firewall allowlist ------------------------------------
 
 variable "allowed_ip_addresses" {
   type        = list(string)
   description = <<-EOT
-    Public egress IPs/CIDRs allowed to reach the workspace front-end AND the
-    storage/Key Vault firewalls (your home/VPN IP). Everything else is denied.
-    NO DEFAULT on purpose — applying with a wrong list locks you out, so the
-    value must be a conscious choice in terraform.tfvars. Find yours:
+    Public egress IPs/CIDRs allowed through the storage/Key Vault firewalls
+    (your home/VPN IP). Everything else is denied. (The workspace front-end is
+    NOT gated by IP — Entra ID only, per ADR-0010.) NO DEFAULT on purpose —
+    applying with a wrong list locks you out of storage/Key Vault, so the value
+    must be a conscious choice in terraform.tfvars. Find yours:
     `curl ifconfig.me`. Prefer a small CIDR range (e.g. x.y.z.0/24) over a
     single IP so an ISP address rotation doesn't lock you out; Azure Storage
     rejects /31 and /32 — use bare IPs or /30 and larger.
@@ -67,7 +84,7 @@ variable "allowed_ip_addresses" {
 
   validation {
     condition     = length(var.allowed_ip_addresses) > 0
-    error_message = "allowed_ip_addresses must contain at least one IP/CIDR, or you will lock yourself out of the workspace."
+    error_message = "allowed_ip_addresses must contain at least one IP/CIDR, or you will lock yourself out of storage and Key Vault."
   }
 }
 

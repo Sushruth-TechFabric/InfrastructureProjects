@@ -4,7 +4,7 @@
 
 variable "resource_group_name" {
   type        = string
-  description = "Resource group for the storage account (e.g. rg-storage-dev-eus2-001)."
+  description = "Resource group for the storage account (e.g. rg-storage-dbx-dev-eus2-001)."
 }
 
 variable "location" {
@@ -32,6 +32,29 @@ variable "soft_delete_retention_days" {
   type        = number
   description = "Days to retain soft-deleted blobs (state/data recovery window)."
   default     = 7
+}
+
+variable "account_replication_type" {
+  type        = string
+  description = "Storage account redundancy (LRS/ZRS/GRS/RAGRS/GZRS/RAGZRS). Default LRS is a dev/lab-appropriate cost choice — revisit for prod resilience requirements."
+  default     = "LRS"
+
+  validation {
+    condition     = contains(["LRS", "ZRS", "GRS", "RAGRS", "GZRS", "RAGZRS"], var.account_replication_type)
+    error_message = "account_replication_type must be one of LRS, ZRS, GRS, RAGRS, GZRS, RAGZRS."
+  }
+}
+
+variable "shared_access_key_enabled" {
+  type        = bool
+  description = <<-EOT
+    Enable storage account key / SAS authentication. Keep false: all sanctioned
+    access is identity-based (Access Connector user-assigned managed identity +
+    Unity Catalog, golden rule 7), so nothing needs account keys, and keys-on
+    lets any principal with listKeys bypass Entra RBAC and UC entirely. Only
+    flip true with a stated, ADR-recorded reason.
+  EOT
+  default     = false
 }
 
 # ---- Network exposure (ADR-0006) --------------------------------------------

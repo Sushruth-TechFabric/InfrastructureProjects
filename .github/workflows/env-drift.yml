@@ -1,0 +1,58 @@
+# Environment drift guard for the Azure Databricks platform
+# (terraform/azure/databricks/environments/{dev,staging}/).
+#
+# Why this file lives at the REPO ROOT and not next to the platform:
+# GitHub Actions only ever discovers and executes workflows under the
+# REPOSITORY ROOT's `.github/workflows/` directory — a `.github/workflows/`
+# folder nested inside a subtree (e.g.
+# `terraform/azure/databricks/.github/workflows/`) is inert; GitHub never
+# looks there. That nested folder exists in this repo today holding only a
+# `.gitkeep` placeholder and `copilot-instructions.md`, for
+# platform-scoped, non-workflow GitHub config — it is NOT a valid workflow
+# location. Every real workflow for every tool/cloud/platform in this
+# monorepo must be registered here, scoped with `paths:` filters (below) so
+# it only runs when the relevant subtree changes.
+#
+# What this checks: the platform's dev/staging environment roots are
+# deliberately maintained as byte-identical copies of each other (the E7
+# "reuse by verbatim copy" doctrine — see
+# terraform/azure/databricks/docs/architecture/decisions and
+# terraform/azure/databricks/docs/reviews/2026-07-terraform-and-docs-review.md,
+# finding R10 option (b), §2.2). Nothing else in CI catches the first
+# dev-only hotfix that never gets re-copied to staging, so this job runs
+# scripts/check-env-drift.ps1 on every push/PR that touches the
+# environments/ tree.
+#
+# Deliberately minimal: no cloud credentials, no `terraform init`/plan, no
+# provider install — this is a pure text-diff check over files already in
+# the checkout, so it needs nothing beyond pwsh (preinstalled on
+# ubuntu-latest).
+
+name: Environment drift guard
+
+on:
+  push:
+    paths:
+      - "terraform/azure/databricks/environments/**"
+      - "terraform/azure/databricks/scripts/check-env-drift.ps1"
+      - ".github/workflows/env-drift.yml"
+  pull_request:
+    paths:
+      - "terraform/azure/databricks/environments/**"
+      - "terraform/azure/databricks/scripts/check-env-drift.ps1"
+      - ".github/workflows/env-drift.yml"
+
+jobs:
+  check-env-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        # Pinned to a commit SHA, not a mutable tag (repo's supply-chain
+        # hardening convention — see
+        # .claude/skills/azure-databricks-author-review/references/github-actions.md §6).
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Run environment drift check
+        shell: pwsh
+        working-directory: terraform/azure/databricks
+        run: ./scripts/check-env-drift.ps1

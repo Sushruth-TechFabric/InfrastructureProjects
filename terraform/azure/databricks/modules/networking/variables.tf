@@ -9,7 +9,7 @@
 
 variable "resource_group_name" {
   type        = string
-  description = "Resource group that holds the spoke VNet and its subnets (e.g. rg-networking-dev-eus2-001)."
+  description = "Resource group that holds the spoke VNet and its subnets (e.g. rg-networking-dbx-dev-eus2-001)."
 }
 
 variable "location" {
@@ -63,13 +63,34 @@ variable "pe_subnet_prefix" {
   description = "CIDR for the private-endpoint subnet."
 }
 
+# ---- Egress mode (exactly ONE of the two below — ADR-0007) ------------------
+
 variable "firewall_private_ip" {
   type        = string
+  default     = null
   description = <<-EOT
-    Private IP of the hub Azure Firewall. Used as the next-hop for the forced-tunneling
-    route (0.0.0.0/0). The env root resolves this from shared-services via an
-    azurerm_firewall data source and passes it in — the module stays unaware of the hub.
+    EGRESS MODE A (firewall). Private IP of the hub Azure Firewall, used as the
+    next-hop for the forced-tunneling route (0.0.0.0/0). The env root resolves
+    this from shared-services via an azurerm_firewall data source and passes it
+    in — the module stays unaware of the hub. Leave null when using NAT egress.
   EOT
+}
+
+variable "enable_nat_gateway_egress" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    EGRESS MODE B (NAT). Create a NAT Gateway on both delegated subnets plus an
+    NSG outbound service-tag allowlist with a deny-Internet catch-all. The
+    cost-optimized dev egress path (ADR-0007). Mutually exclusive with
+    firewall_private_ip.
+  EOT
+
+  validation {
+    # Exactly one egress mode: forced tunneling to a firewall, or NAT + NSGs.
+    condition     = var.enable_nat_gateway_egress ? var.firewall_private_ip == null : var.firewall_private_ip != null
+    error_message = "Choose exactly one egress mode: set firewall_private_ip (forced tunneling) OR enable_nat_gateway_egress = true (NAT + NSG allowlist), never both or neither."
+  }
 }
 
 variable "tags" {

@@ -31,7 +31,7 @@ private endpoints (they depend on both the spoke PE subnet and the hub DNS zones
 
 ## Consequences
 
-- **Positive:** modules are reusable across dev/qa/prod unchanged; every cross-
+- **Positive:** modules are reusable across dev/staging/prod unchanged; every cross-
   state dependency is visible in one file (`environments/<env>/main.tf`); the
   private-endpoint pattern is shown once and repeated, which is good for learning.
 - **Trade-offs:** the env root is larger and does more; some coupling logic isn't
@@ -40,4 +40,4 @@ private endpoints (they depend on both the spoke PE subnet and the hub DNS zones
 ## References
 
 - `docs/architecture/azure-platform-architecture.md` §1
-- `.claude/skills/azure-databricks-iac/references/terraform.md` §1–3
+- `.claude/skills/azure-databricks-author-review/references/terraform.md` §1–3

@@ -4,7 +4,7 @@
 
 variable "resource_group_name" {
   type        = string
-  description = "Resource group for the Key Vault (e.g. rg-security-dev-eus2-001)."
+  description = "Resource group for the Key Vault (e.g. rg-security-dbx-dev-eus2-001)."
 }
 
 variable "location" {

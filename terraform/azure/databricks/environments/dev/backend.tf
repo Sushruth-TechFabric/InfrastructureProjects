@@ -1,29 +1,34 @@
 # =============================================================================
-# environments/dev — REMOTE STATE BACKEND (Azure Storage)
+# environments/dev — REMOTE STATE BACKEND (Azure Storage, partial config)
 # -----------------------------------------------------------------------------
-# One state file per deployment boundary. This boundary's key is
+# One state file per deployment boundary; this boundary's key is
 # "environments/dev/terraform.tfstate".
 #
-# The backend storage account is created ONCE by scripts/bootstrap-tfstate.ps1
-# (run with -Environment dev). Its name is subscription-hashed, so it is NOT
-# statically known here. Either paste storage_account_name from the bootstrap
-# output, or leave it blank and pass it at init:
+# The backend values are INTENTIONALLY NOT hardcoded here (E1 — hardcoded
+# backend block removed, subscription-hashed name must stay uncommitted; from
+# the uncommitted 2026-07-10 review): the storage account name is
+# subscription-hashed by the bootstrap
+# script, so it differs per subscription/deployer and must never be baked into
+# a file every clone of this repo shares.
 #
-#   terraform init \
-#     -backend-config="resource_group_name=rg-tfstate-dev-wus3-001" \
-#     -backend-config="storage_account_name=<from bootstrap>" \
-#     -backend-config="container_name=tfstate" \
-#     -backend-config="key=environments/dev/terraform.tfstate"
+# Setup (once, per deployment boundary):
+#   1. ./scripts/bootstrap-tfstate.ps1 -Environment dev -Location westus3
+#   2. copy backend.hcl.example -> backend.hcl, paste the values the script
+#      printed (backend.hcl is gitignored: it is per-deployment, not shared
+#      config)
+#   3. terraform init "-backend-config=backend.hcl"
+#      (keep the quotes — PowerShell splits an unquoted -key=value arg on the
+#      dot, so the command only works identically across shells when quoted)
 #
-# use_azuread_auth = true -> data-plane auth via your Entra identity / CI OIDC.
+# MIGRATING AN EXISTING DEPLOYMENT off the old hardcoded backend: this change
+# does not move state. Run
+#   terraform init "-backend-config=backend.hcl" -migrate-state
+# once, with a backend.hcl that points at the SAME resource group / storage
+# account / container / key the hardcoded block used to (see git history for
+# the old values if you don't already have them recorded). Do not run this
+# yourself as part of an unattended apply.
 # =============================================================================
 
 terraform {
-  backend "azurerm" {
-    resource_group_name  = "rg-tfstate-dev-wus3-001"
-    storage_account_name = "sttfstatedevwus30016dc9" # from bootstrap-tfstate.ps1 -Environment dev
-    container_name       = "tfstate"
-    key                  = "environments/dev/terraform.tfstate"
-    use_azuread_auth     = true
-  }
+  backend "azurerm" {}
 }

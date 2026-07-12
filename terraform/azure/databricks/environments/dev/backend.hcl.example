@@ -1,0 +1,10 @@
+# Copy to backend.hcl (gitignored) and fill in from the output of
+#   ./scripts/bootstrap-tfstate.ps1 -Environment dev -Location westus3
+# then run: terraform init "-backend-config=backend.hcl"
+# (keep the quotes — the command then works identically in every shell)
+
+resource_group_name  = "rg-tfstate-dbx-dev-wus3-001"
+storage_account_name = "<from bootstrap output, e.g. sttfstatedbxdevwus3XXXX>"
+container_name       = "tfstate"
+key                  = "environments/dev/terraform.tfstate"
+use_azuread_auth     = true # data-plane auth via your Entra identity; no account key

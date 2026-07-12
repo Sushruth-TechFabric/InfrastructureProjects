@@ -43,4 +43,4 @@ assignment / storage credential / external location / GRANTs — to later passes
 ## References
 
 - `docs/architecture/azure-platform-architecture.md` §4 (workspace governance)
-- `.claude/skills/azure-databricks-iac/references/databricks.md` §8–9
+- `.claude/skills/azure-databricks-author-review/references/databricks.md` §8–9

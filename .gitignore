@@ -39,4 +39,13 @@ terraform.rc
 # (Other environments' terraform.tfvars stay committed, per the note above.)
 # =============================================================================
 terraform/azure/databricks/environments/dev-lab/terraform.tfvars
-terraform/azure/databricks/environments/dev-lab/backend.hcl
+
+# =============================================================================
+# backend.hcl (E1, 2026-07-10 review): every deployment boundary's backend
+# storage-account name is subscription-hashed by scripts/bootstrap-tfstate.ps1,
+# so it is deployer/subscription-specific and must never be committed. Every
+# root uses the empty `backend "azurerm" {}` + committed `backend.hcl.example`
+# pattern — copy the example, fill in the bootstrap output, keep the real file
+# local. Repo-wide, not just dev-lab.
+# =============================================================================
+terraform/azure/databricks/**/backend.hcl

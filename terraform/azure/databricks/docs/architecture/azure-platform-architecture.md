@@ -54,7 +54,7 @@ infrastructure/
 │   └── identity/
 ├── environments/               # one root module + one state file each
 │   ├── dev/
-│   ├── qa/
+│   ├── staging/
 │   └── prod/
 ├── shared-services/            # hub network, DNS, UC metastore + group sync (own state)
 └── .github/workflows/          # CI/CD pipelines
@@ -90,21 +90,24 @@ storage). Each step reads the previous step's outputs via Azure data sources.
 
 ## 2. Naming conventions and tagging
 
-**Naming — MUST follow.** Pattern: `{resourceType}-{workload}-{environment}-{region}-{instance}`.
+**Naming — MUST follow.** Pattern: `{resourceType}-{project}-{environment}-{region}-{instance}`.
 
 - **`resourceType`** — the CAF abbreviation for the resource (table below). This is a hard
   standard, not a preference: name-based cross-state lookups depend on it.
-- **`workload`** — `dbx` for the platform (or a more specific token, e.g. `hub` for
-  shared-services hub resources).
-- **`environment`** — `dev` | `qa` | `prod` | `shared`.
+- **`project`** — the short project/workload token, set once per root via the `project`
+  variable (default `dbx`; 2–8 lowercase alphanumerics — Key Vault and storage-account
+  length limits are the binding constraint). This is what makes the roots reusable across
+  projects without name collisions. Hub resources add a function token before it
+  (e.g. `vnet-hub-{project}-shared-...`).
+- **`environment`** — `dev` | `staging` | `prod` | `shared`.
 - **`region`** — the **abbreviated** region token, used **consistently in every name**
   (never the long form). Current platform region: **West US 3 → `wus3`**. (`eus2` =
   East US 2, etc. Keep a single map; the state-bootstrap script has one.)
 - **`instance`** — zero-padded, e.g. `001`.
 
-| Resource | Example |
+| Resource | Example (project = `dbx`) |
 | --- | --- |
-| Resource group | `rg-dbx-prod-wus3-001` |
+| Resource group (function-based) | `rg-networking-dbx-dev-wus3-001` |
 | Virtual network | `vnet-dbx-dev-wus3-001` |
 | Subnet | `snet-dbx-host-dev`, `snet-dbx-container-dev`, `snet-dbx-pe-dev` |
 | Key Vault (24-char limit) | `kv-dbx-dev-wus3-001` |
@@ -132,6 +135,13 @@ Abbreviate the region/tokens further only where Azure imposes length limits (Key
 storage accounts ≤24, alphanumeric, no hyphens). Source of truth for prefixes:
 [CAF resource abbreviations](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations).
 
+**Databricks objects** (not Azure resources, so outside CAF) follow the same
+`{type}-{project}-{env}-{region}-{instance}` shape with a Databricks-specific type token:
+`mst` — Unity Catalog metastore (ADR-0011, e.g. `mst-dbx-shared-wus3-001`); `ncc` — serverless
+Network Connectivity Config (ADR-0012, e.g. `ncc-dbx-dev-wus3-001`); `lb` — Lakebase database
+instance (ADR-0013, e.g. `lb-dbx-dev-wus3-001`, lowercase and DNS-label-safe). The NCC name must
+match Databricks' `^[0-9a-zA-Z-_]{3,30}$` and the region token is the workspace region.
+
 **Tagging — MUST apply to every resource.** Minimum tags: `Environment`, `Owner`,
 `CostCenter`, `ManagedBy` (always `terraform`), `Project`. Tags drive cost allocation,
 incident ownership, and monitoring filters.
@@ -140,15 +150,18 @@ incident ownership, and monitoring filters.
 
 ## 3. Landing zone and networking
 
-**Decision.** Hub-spoke topology. A hub VNet holds shared network services (Azure
-Firewall, DNS, gateways). A Databricks **spoke** VNet holds the workload and peers to the
-hub. Resource groups are organized **by function** within an environment
-(`rg-networking-*`, `rg-databricks-*`, `rg-storage-*`, `rg-security-*`, `rg-shared-*`).
+**Decision.** Hub-spoke topology. A hub VNet holds shared network services — the four
+Private DNS zones always, plus (optionally, [ADR-0007](decisions/0007-nat-gateway-nsg-egress-for-dev.md))
+the Azure Firewall and its NAT Gateway. A Databricks **spoke** VNet holds the workload;
+it **peers to the hub only in firewall (forced-tunneling) mode** — in NAT-egress mode the
+spoke stands alone and consumes only the hub's DNS zones. Resource groups are organized
+**by function** within an environment (`rg-networking-*`, `rg-databricks-*`,
+`rg-storage-*`, `rg-security-*`, `rg-shared-*`).
 
-**Rationale.** Hub-spoke gives one central place to enforce egress policy, isolates spokes
-from each other (inter-spoke traffic transits the hub and can be inspected), and shares
-services (DNS, on-prem connectivity) once instead of per-workload. Function-based resource
-groups let RBAC follow least privilege at the group boundary.
+**Rationale.** Hub-spoke gives one central place to enforce egress policy (when the
+firewall is deployed), isolates spokes from each other, and shares services (DNS, on-prem
+connectivity) once instead of per-workload. Function-based resource groups let RBAC
+follow least privilege at the group boundary.
 
 ### Subnets for Databricks VNet injection — MUST
 
@@ -164,13 +177,24 @@ groups let RBAC follow least privilege at the group boundary.
 ### Traffic controls — MUST
 
 - **NSGs** on the Databricks subnets. Databricks auto-creates and protects required NSG
-  rules via the network intent policy; do not override them.
-- **UDRs / forced tunneling:** route `0.0.0.0/0` from the spoke subnets to the hub
-  firewall's private IP so all egress is inspected. The firewall **MUST allowlist** the
-  required Databricks/Azure control-plane endpoints (per region) or clusters silently fail
-  to launch.
-- **NAT Gateway** for a stable, auditable outbound public IP (typically in the hub when
-  forced tunneling is used).
+  rules via the network intent policy; do not override them. (Adding *extra* rules is
+  fine — the NAT egress mode below does — but only as standalone
+  `azurerm_network_security_rule` resources, never inline blocks, or Terraform deletes
+  the managed rules.)
+- **Egress: exactly ONE of two modes** ([ADR-0007](decisions/0007-nat-gateway-nsg-egress-for-dev.md));
+  either way, clusters need an **explicit** egress path — Azure retired default outbound
+  access for new subnets (Sept 2025):
+  - **Firewall mode (prod/client posture):** UDR routes `0.0.0.0/0` from the spoke
+    subnets to the hub firewall's private IP so all egress is inspected; hub NAT Gateway
+    behind the firewall for a stable egress IP. The firewall **MUST allowlist** the
+    required Databricks/Azure control-plane endpoints (per region) or clusters silently
+    fail to launch. FQDN-level control; ~$950/mo idle.
+  - **NAT mode (current dev default):** a spoke-owned **NAT Gateway** on both delegated
+    subnets (stable, auditable egress IP, ~$33/mo) + **NSG outbound service-tag
+    allowlist** (`AzureDatabricks`, `AzureActiveDirectory`, `Storage.<region>`,
+    `Sql.<region>`, `EventHub.<region>`) with a deny-Internet catch-all. Same L3/L4
+    policy as the firewall rules, but **no FQDN filtering or inspection** — a service
+    tag admits the whole regional service. Acceptable for dev; **not** for prod.
 
 ### Private connectivity and DNS — MUST
 
@@ -224,8 +248,6 @@ front-end would have forced self-hosted runners inside the VNet).
 
 **Hardening — MUST, because the front-end is internet-reachable:**
 
-- **IP access lists** on the workspace to allow only known egress ranges (corporate /
-  VPN / CI egress), denying the rest.
 - **Entra ID Conditional Access** (MFA, device/compliance, and ideally trusted-location
   policies) on the Databricks enterprise app.
 - The **compute plane remains fully private** (SCC, no public IP, back-end Private Link),
@@ -233,8 +255,12 @@ front-end would have forced self-hosted runners inside the VNet).
   access off). Internet exposure is limited to the **authenticated front-end control
   surface only** — not to data or compute.
 
+Workspace **IP access lists are deliberately NOT used** (ADR-0010): the front-end is
+gated by identity alone. IP allowlists added operational friction (egress-IP churn,
+Terraform lockout risk) without changing the trust model — identity is the perimeter.
+
 Governing principle: **default-deny on the data/compute planes; gate the front-end with
-identity + IP allowlists rather than a private network path.**
+identity rather than a private network path or IP allowlists.**
 
 ### Data-layer security — MUST
 
@@ -254,14 +280,18 @@ identity + IP allowlists rather than a private network path.**
     account-level object, one per region, shared by every workspace** in that region. It is
     created with the **account-level `databricks` provider** (authenticated with the
     Databricks **account ID**, a different auth path than the per-workspace provider), not
-    inside an environment root. **Entra ID → Databricks account group sync (SCIM /
-    identity federation)** is also account-level and lives here, so the groups UC grants
-    reference exist before any workspace deploys.
+    inside an environment root. The metastore carries **no root storage** — managed-table
+    storage is declared **per catalog, owned by each environment** (ADR-0011), so no env's
+    data ever lands in shared-services-owned storage. Identity sync is **AIM** (account
+    console setting, no sync infra); the env-scoped access groups live in each env root
+    via `modules/workspace-access` (ADR-0008).
   - **Workspace-level (per environment):** **metastore assignment** attaches the shared
-    metastore to each env's workspace; then per-env a **storage credential** wraps the
-    Access Connector identity, an **external location** binds an ADLS path to that
-    credential, and access is granted with SQL `GRANT` to the synced **Entra ID groups**
-    (never individuals). All access is audit-logged. Namespace is `catalog.schema.table`.
+    metastore to each env's workspace (resolved **by name** — the cross-state contract
+    extended to Databricks account objects); then per-env a **storage credential** wraps
+    the Access Connector identity, an **external location** binds an ADLS path to that
+    credential (including the catalog's managed-storage container), and access is granted
+    with SQL `GRANT` to the AIM-synced **Entra ID groups** (never individuals). All access
+    is audit-logged. Namespace is `catalog.schema.table`.
 - **Key Vault** for unavoidable secrets: RBAC authorization, private endpoint, purge
   protection, public access off. Notebooks read secrets via a **Key Vault-backed secret
   scope** (`dbutils.secrets.get`); the secret physically stays in Key Vault. Secrets
@@ -324,26 +354,31 @@ token fails the condition and is rejected.
 
 ## 6. Network architecture diagram
 
+Current dev topology — **NAT egress mode** ([ADR-0007](decisions/0007-nat-gateway-nsg-egress-for-dev.md)).
+In firewall mode the spoke instead force-tunnels `0.0.0.0/0` to the hub Azure Firewall
+(deployed with `deploy_firewall = true`) and peers to the hub VNet.
+
 ```mermaid
 flowchart TB
   users["Users and admins<br/>browser, CLI, Terraform"]
   gha["GitHub Actions runner<br/>OIDC federated, no stored secret"]
 
   subgraph hub["Hub VNet - shared services"]
-    fw["Azure Firewall<br/>egress allowlist + forced tunneling"]
-    nat["NAT Gateway<br/>stable egress IP"]
     pdns["Private DNS zones<br/>blob / dfs / vault / azuredatabricks"]
+    fw["(optional) Azure Firewall + hub NAT<br/>deploy_firewall = true — forced-tunneling mode"]
   end
 
   subgraph spoke["Spoke VNet - Databricks workload"]
     host["Host subnet<br/>delegated, SCC, no public IP"]
     cont["Container subnet<br/>delegated, SCC, no public IP"]
+    nat["NAT Gateway<br/>stable egress IP"]
+    nsg["NSG outbound allowlist<br/>service tags + deny Internet"]
     pe["Private endpoint subnet"]
   end
 
   subgraph cp["Databricks control plane - Microsoft-managed"]
     scc["SCC relay"]
-    uiapi["Workspace UI and REST API<br/>front-end public, Entra ID + IP access lists"]
+    uiapi["Workspace UI and REST API<br/>front-end public, Entra ID-gated"]
   end
 
   subgraph data["Data and secrets - private only"]
@@ -352,21 +387,20 @@ flowchart TB
     ac["Access Connector<br/>user-assigned managed identity"]
   end
 
-  approved["Approved internet endpoints"]
+  approved["Allowed service tags<br/>AzureDatabricks / Entra ID / Storage / Sql / EventHub"]
 
-  users -->|HTTPS over internet, Entra ID auth + IP access lists| uiapi
+  users -->|HTTPS over internet, Entra ID auth| uiapi
   gha -->|OIDC to Entra ID, REST API over internet| uiapi
   host -->|outbound SCC tunnel| scc
   cont -->|outbound SCC tunnel| scc
-  host -->|0.0.0.0/0 via UDR| fw
-  cont -->|0.0.0.0/0 via UDR| fw
-  fw --> nat --> approved
+  host -->|egress filtered by NSG| nsg
+  cont -->|egress filtered by NSG| nsg
+  nsg --> nat --> approved
   pe -->|back-end Private Link| uiapi
   pe -->|private endpoint| adls
   pe -->|private endpoint| kv
   ac -.Storage Blob Data Contributor.-> adls
   cont -.assumes identity.-> ac
-  spoke <-->|VNet peering| hub
   pdns -.resolves names.-> adls
   pdns -.resolves names.-> uiapi
 ```
@@ -381,11 +415,13 @@ flowchart TB
 3. Follow the naming convention exactly; apply the required tag set to every resource.
 4. Two delegated Databricks subnets (`/26`+, `/23`–`/24` in prod) + a private-endpoint
    subnet; VNet `/16`–`/24`.
-5. Forced tunneling to the hub firewall with an egress allowlist; private endpoints +
-   linked Private DNS zones for every PaaS service.
+5. Exactly one egress mode per spoke (ADR-0007): forced tunneling to the hub firewall
+   with an egress allowlist (prod posture), or spoke NAT Gateway + NSG service-tag
+   allowlist with deny-Internet (dev default). Private endpoints + linked Private DNS
+   zones for every PaaS service in both modes.
 6. SCC on (no public IP); **back-end** Private Link for the compute plane. Front-end is
-   internet-reachable, gated by Entra ID + workspace IP access lists (no front-end Private
-   Link). Data/secret planes stay private (public access off).
+   internet-reachable, gated by Entra ID (no front-end Private Link, no workspace IP
+   access lists — ADR-0010). Data/secret planes stay private (public access off).
 7. Secretless data access via Access Connector **user-assigned managed identity** +
    `Storage Blob Data Contributor`; governance via Unity Catalog; secrets only in Key
    Vault-backed scopes.
