@@ -34,9 +34,13 @@ on:
   push:
     paths:
       - "terraform/azure/databricks/environments/**"
+      - "terraform/azure/databricks/scripts/check-env-drift.ps1"
+      - ".github/workflows/env-drift.yml"
   pull_request:
     paths:
       - "terraform/azure/databricks/environments/**"
+      - "terraform/azure/databricks/scripts/check-env-drift.ps1"
+      - ".github/workflows/env-drift.yml"
 
 jobs:
   check-env-drift:
