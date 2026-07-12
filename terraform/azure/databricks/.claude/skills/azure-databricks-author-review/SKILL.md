@@ -55,9 +55,13 @@ $ARGUMENTS
 4. **Cross-state dependencies use Azure data sources by name** (e.g. `azurerm_subnet`),
    never `terraform_remote_state`, never hardcoded resource IDs. Naming conventions are
    the contract that makes this work.
-5. **Pin everything.** Modules via `?ref=vX.Y.Z` (git tag), providers via
-   `required_providers`, Terraform via `required_version`; commit `.terraform.lock.hcl`.
-   Pin third-party GitHub Actions to a **commit SHA**, not a mutable tag.
+5. **Pin everything that resolves remotely; modules stay local paths.** Modules in this
+   repo are **local monorepo paths** (`source = "../../modules/<name>"`), versioned by
+   the repo itself (ADR-0014) — do NOT convert them to git-tag sources or flag local
+   paths as unpinned. Pin providers via `required_providers`, Terraform core via
+   `required_version`, and ALWAYS commit `.terraform.lock.hcl`. Pin third-party GitHub
+   Actions to a **commit SHA**, not a mutable tag. (Git-tag `?ref=vX.Y.Z` pinning
+   applies only if modules are ever externalized to their own repo/registry.)
 6. **Default-deny networking.** Disable public access; use private endpoints + linked
    Private DNS zones for every PaaS service. Forgetting the DNS link is the classic
    silent failure.
@@ -69,12 +73,21 @@ $ARGUMENTS
    Cluster policies force every cluster to inherit the secured network.
 8. **Identity over secrets.** User-assigned managed identities by default; data access
    via Access Connector identity + `Storage Blob Data Contributor` (no keys). CI/CD via
-   OIDC federated credential scoped to repo+branch. Never grant `Owner` to automation.
+   OIDC federated credential scoped to repo+environment. Never grant `Owner` to automation.
 9. **Plan is reviewed, not the version number.** Generate a plan for the target
-   environment; humans approve the diff. `apply` runs only in CI after merge, never from
-   a laptop against shared environments.
+   environment; humans approve the diff. `apply` runs only in CI after merge **once CI
+   exists** — today `.github/workflows/` is empty, and the documented method is the
+   runbook (laptop apply; see `docs/runbooks/`).
 10. **Least privilege RBAC.** Narrowest scope, most specific built-in role, assign to
     Entra ID groups not individuals.
+
+### dev-lab exception (ADR-0006)
+
+`environments/dev-lab/` is a documented **cost-optimized lab profile** (ADR-0006) and is
+exempt from the network-privacy rules above — e.g. its
+`public_network_access_enabled = true` and skipped private endpoints are sanctioned, not
+violations. Do not flag them. The exemption is scoped to that root ONLY; every other
+root follows the golden rules in full.
 
 ## Pre-flight checklist (run before reporting any change as done)
 
@@ -83,7 +96,8 @@ $ARGUMENTS
 - [ ] Cross-resource references resolved via data sources / named lookups, not hardcoded IDs.
 - [ ] New PaaS resource: public access disabled + private endpoint + private DNS zone linked.
 - [ ] New identity: user-assigned MI, scoped role at the narrowest scope, granted to a group.
-- [ ] Module/provider versions pinned; lock file committed.
+- [ ] Provider + core Terraform versions pinned; lock file committed. Module calls use
+      local monorepo paths (ADR-0014), not git-tag sources.
 - [ ] A `terraform plan` for the target environment was produced and reviewed.
 - [ ] If it conflicts with a Golden rule or the architecture doc, surface the conflict
       instead of silently complying.

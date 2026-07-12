@@ -18,17 +18,23 @@
 ## 1. Structure & state
 - `modules/` = reusable blueprints (no env values). `environments/{dev,staging,prod}/` and
   `shared-services/` = root configs, **each with its own state file**.
-- Backend is Azure Storage with **blob-lease locking** (no extra infra needed):
+- Backend is Azure Storage with **blob-lease locking** (no extra infra needed), declared
+  as **partial configuration** — the block stays EMPTY. Never hardcode backend values:
+  the state storage-account name is subscription-hashed by
+  `scripts/bootstrap-tfstate.ps1`, so it differs per subscription/deployer and must not
+  be baked into a file every clone shares.
   ```hcl
   terraform {
-    backend "azurerm" {
-      resource_group_name  = "rg-tfstate-prod-eus2-001"
-      storage_account_name = "sttfstateprodeus2001"
-      container_name       = "tfstate"
-      key                  = "environments/prod/terraform.tfstate"
-    }
+    backend "azurerm" {}
   }
   ```
+  Setup, once per deployment boundary:
+  1. `./scripts/bootstrap-tfstate.ps1 -Environment <env> -Location <region>`
+  2. Copy the committed `backend.hcl.example` to `backend.hcl` (gitignored — it is
+     per-deployment, not shared config) and paste the values the script printed.
+  3. `terraform init "-backend-config=backend.hcl"` — keep the quotes: PowerShell
+     splits an unquoted dotted `-key=value` arg on the dot, so the command only works
+     identically across shells when quoted.
 - Harden the state storage account: **RBAC first** (only platform team + CI/CD principal,
   via `Storage Blob Data Contributor` at container scope), then no public access + private
   endpoint, soft delete + versioning, TLS-only, and a `CanNotDelete` lock.
@@ -55,23 +61,30 @@
   intentional differences live in each env's `tfvars`.
 
 ## 3. Modules & versioning
-- Reference shared modules by **pinned git tag**, not a local path, so each env upgrades
-  on its own schedule:
+- Modules in this repo are **local monorepo paths** (ADR-0014):
   ```hcl
   module "networking" {
-    source = "git::https://github.com/your-org/terraform-modules.git//networking?ref=v1.3.0"
+    source = "../../modules/networking"
   }
   ```
-- Use **semantic versioning** as a compatibility contract: PATCH = safe fix, MINOR =
-  backward-compatible addition, MAJOR = breaking (renamed/removed/required input). A
-  breaking change in a non-MAJOR bump destroys the trust model — never do it.
-- Start with git tags; graduate to a private registry only when module discoverability
-  becomes a real problem.
+  The repo itself versions the modules — a module and the roots that call it always ship
+  from the same commit. Do NOT convert local paths to git-tag sources, and do not flag
+  them as "unpinned".
+- **Lockstep consequence:** every root picks up module changes on its next plan/apply —
+  no per-root module version skew is possible. After editing a module, plan **every**
+  environment root that calls it before merging.
+- What actually gets pinned: providers and Terraform core (§4). ALWAYS commit
+  `.terraform.lock.hcl`.
+- **Only if modules are ever externalized** to their own repo/registry (they are not
+  today): pin by git tag (`source = "git::…//networking?ref=v1.3.0"`), treat semantic
+  versioning as the compatibility contract (PATCH = safe fix, MINOR =
+  backward-compatible addition, MAJOR = breaking), and graduate to a private registry
+  only when module discoverability becomes a real problem.
 
 ## 4. Provider & version pinning
 ```hcl
 terraform {
-  required_version = "~> 1.9"
+  required_version = ">= 1.9, < 2.0" # per ADR-0005 — the upper bound guards a future breaking major
   required_providers {
     azurerm    = { source = "hashicorp/azurerm",    version = "~> 4.0" }
     databricks = { source = "databricks/databricks", version = "~> 1.121" }
@@ -112,7 +125,7 @@ terraform state show <addr>          # inspect one resource
 terraform state mv <src> <dst>       # rename/move in state (prefer 'moved' blocks)
 terraform state rm <addr>            # forget a resource (does NOT destroy it)
 terraform import <addr> <id>         # bring an existing Azure resource under management
-terraform apply -replace=<addr>      # force recreate (replaces deprecated 'taint')
+terraform apply "-replace=<addr>"    # force recreate (replaces deprecated 'taint'); keep the quotes — PowerShell splits unquoted dotted args
 terraform force-unlock <LOCK_ID>     # clear a stale state lock
 ```
 
@@ -126,7 +139,8 @@ terraform force-unlock <LOCK_ID>     # clear a stale state lock
   }
   ```
 - Adopting existing infra: `import` blocks (declarative) or `terraform import` (CLI).
-- Forcing recreation: `-replace=<addr>` (not the old `taint`).
+- Forcing recreation: `"-replace=<addr>"` (not the old `taint`) — quote it; resource
+  addresses contain dots and PowerShell splits unquoted dotted args.
 
 ## 8. Quality gates
 - `terraform fmt -check` and `terraform validate` (cheap, always).

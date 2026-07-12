@@ -23,6 +23,7 @@ while implementing it, so future work (human or AI agent) has the reasoning as c
 | [0011](0011-account-metastore-in-shared-services.md) | Account-level UC metastore in shared-services; catalog-level managed storage | Accepted |
 | [0012](0012-serverless-network-connectivity.md) | Serverless private connectivity (NCC) owned by the environment root | Accepted |
 | [0013](0013-lakebase-dev-oltp.md) | Lakebase (managed Postgres / OLTP) in dev | Accepted |
+| [0014](0014-local-module-paths.md) | Local module paths in the monorepo | Accepted |
 
 ## How to add an ADR
 

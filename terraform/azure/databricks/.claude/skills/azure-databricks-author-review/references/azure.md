@@ -15,9 +15,12 @@
 ---
 
 ## 1. Naming & tagging
-- Pattern: `{type}-{project}-{env}-{region}-{instance}` (project = short per-project token, e.g. `dbx`), e.g. `vnet-dbx-prod-eastus2-001`.
+- Pattern: `{type}-{project}-{env}-{region}-{instance}` (project = short per-project token, e.g. `dbx`), e.g. `vnet-dbx-prod-eus2-001`.
+  `{region}` is always the **abbreviation** (`eus2`, `wus3`), **never the long region
+  name** (ADR-0005) — long names break the name-based cross-state lookups.
   Respect Azure limits: Key Vault ≤24 chars; storage accounts ≤24, lowercase alphanumeric,
-  globally unique (`stdbxprodeus2001`). Use CAF abbreviations for `{type}`.
+  globally unique (`stdbxprodeus2001`). Use CAF abbreviations for `{type}`
+  (note: private endpoint is `pep`, NOT `pe`).
 - Tag **every** resource: `Environment`, `Owner`, `CostCenter`, `ManagedBy=terraform`,
   `Project`. Enforce with Azure Policy so untagged resources are denied.
 
@@ -107,7 +110,7 @@ az network private-dns zone create -g rg-networking-dbx-dev-eus2 \
   -n privatelink.blob.core.windows.net
 az network private-dns link vnet create -g rg-networking-dbx-dev-eus2 \
   -z privatelink.blob.core.windows.net -n link-spoke \
-  -v vnet-dbx-dev-eastus2-001 -e false
+  -v vnet-dbx-dev-eus2-001 -e false
 
 # Inspect role assignments at a scope
 az role assignment list --scope <resource-id> -o table
