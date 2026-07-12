@@ -47,7 +47,14 @@ policy_max_workers                 = 4
 # Account id is at accounts.azuredatabricks.net (an identifier, not a secret).
 # Prerequisite: Automatic Identity Management ENABLED on the account
 # (Security -> User provisioning) and the deployer is an ACCOUNT admin.
-databricks_account_id = "00000000-0000-0000-0000-000000000000" # TODO: set your Databricks account GUID
+# REQUIRED before deploy: your Databricks account ID from
+# accounts.azuredatabricks.net (top-right) — plan fails until set. Must be
+# IDENTICAL across shared-services/dev/staging.
+databricks_account_id = "00000000-0000-0000-0000-000000000000"
+
+# Left UNSET on purpose: defaults to "azure-cli" (rides `az login` locally).
+# CI overrides via TF_VAR_databricks_account_auth_type = "github-oidc-azure".
+# databricks_account_auth_type = "azure-cli"
 
 # Map keys are immutable handles (never rename them — ADR-0008); rename the
 # display name via role_token instead. Membership is authoritative: this list
@@ -130,6 +137,33 @@ warehouse_auto_stop_mins = 10
 # 2026-07-10 review, not yet implemented) — irrelevant while disabled, but
 # flag it before ever enabling Lakebase in a promoted environment.
 lakebase_enabled = false
+
+# The knobs below only take effect once lakebase_enabled = true. Left
+# commented (their variable defaults apply) while Lakebase stays off; shown
+# here for completeness so promoting this root is a values change, not a
+# code change (R8, 2026-07-10 review).
+# lakebase_capacity       = "CU_1"    # CU_1/CU_2/CU_4/CU_8 — start smallest
+# lakebase_retention_days = 2         # point-in-time restore window, 2-35 days
+# lakebase_stopped        = false     # true = pause instance (storage-only billing)
+# lakebase_can_manage     = ["engineers"]        # CAN_MANAGE: settings, roles, delete
+# lakebase_can_use        = ["users", "bi_users"] # CAN_USE: connect and run SQL
+
+# Left UNSET on purpose: defaults to false. dev convenience: true purges the
+# Lakebase managed-Postgres instance's storage on `terraform destroy` instead
+# of leaving it behind.
+# lakebase_purge_on_delete = false
+
+# ---- Serverless network connectivity (NCC, ADR-0012) -------------------------
+# Left UNSET on purpose: defaults to false. Two-phase NCC approval (ADR-0012):
+# apply #1 creates the NCC + private-endpoint rules (connections land
+# PENDING); flip this to true and apply #2 to have Terraform (azapi) approve
+# them. Flip to true after the first full apply.
+# ncc_approval_enabled = false
+
+# ---- Key Vault ----------------------------------------------------------------
+# Left UNSET on purpose: defaults to false. dev convenience: true purges the
+# Key Vault (instead of soft-delete retention) on `terraform destroy`.
+# kv_purge_on_destroy = false
 
 # ---- Tags (required set on every resource) ----------------------------------
 tags = {

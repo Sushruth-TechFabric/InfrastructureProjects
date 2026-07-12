@@ -1,0 +1,65 @@
+# =============================================================================
+# shared-services — CONCRETE VALUES (copy to terraform.tfvars and fill in)
+# -----------------------------------------------------------------------------
+# R8 (2026-07-10 review): every root ships a complete, placeholder-valued
+# .example so a fresh clone never inherits a previous deployment's real
+# identifiers. Placeholders below are deliberately invalid/generic — replace
+# every one before applying.
+#
+# Safe to commit once filled in: subscription id and CIDRs are not secrets.
+# Real secrets never go here — they come from Key Vault or an OIDC token at
+# runtime.
+# =============================================================================
+
+subscription_id = "00000000-0000-0000-0000-000000000000" # TODO: set your hub/platform subscription GUID
+
+project       = "dbx" # short token embedded in every resource name — spokes must match
+location      = "westus3"
+region_abbrev = "wus3"
+instance      = "001"
+
+hub_vnet_address_space = ["10.0.0.0/24"]
+firewall_subnet_prefix = "10.0.0.0/26"
+
+# ADR-0007: firewall chain OFF by default — spokes egress via their own NAT
+# Gateway + NSG allowlist. Flip to true (and rewire the spoke roots to
+# firewall mode) to restore the enterprise forced-tunneling reference. Meter
+# warning: true costs ~$1.25/hr firewall + NAT + IPs from the moment of apply.
+deploy_firewall = false
+
+# Left UNSET on purpose: only needed if you later choose to centralize the
+# Private DNS zone -> VNet links here instead of in each env root.
+# spoke_vnet_names = []
+
+# REQUIRED before deploy: your Databricks account ID from
+# accounts.azuredatabricks.net (top-right) — plan fails until set. Must be
+# IDENTICAL across shared-services/dev/staging.
+databricks_account_id = "00000000-0000-0000-0000-000000000000"
+
+# Left UNSET on purpose: defaults to "azure-cli" (rides `az login` locally).
+# CI overrides via TF_VAR_databricks_account_auth_type = "github-oidc-azure".
+# databricks_account_auth_type = "azure-cli"
+
+# ADR-0011 follow-up: metastore owner is a platform-admin ACCOUNT GROUP, never
+# the applying individual (rule 10). Left UNSET (null) on purpose for the very
+# first apply — see the BOOTSTRAP ORDER CAVEAT below. Once environments/dev
+# pass 2 has created its admins group, uncomment and point this at it (or a
+# platform-wide admin group if one exists).
+#
+# BOOTSTRAP ORDER CAVEAT: this metastore is created in shared-services (deploy
+# step 2), BEFORE environments/dev (step 4) ever creates its admins group —
+# on a brand-new subscription the very first shared-services apply will 400 on
+# a nonexistent owner principal if this is set. Leave it commented out (or
+# null) for that first apply, run environments/dev pass 2 so the group exists,
+# then uncomment and re-apply shared-services. Every apply after that is a
+# normal in-place update.
+# metastore_owner = "grp-dbx-dev-admins"
+
+# ---- Tags (required set on every resource) ----------------------------------
+tags = {
+  Environment = "shared"
+  Owner       = "platform-team"
+  CostCenter  = "cc-platform"
+  ManagedBy   = "terraform"
+  Project     = "azure-databricks-platform"
+}

@@ -1,10 +1,17 @@
 # =============================================================================
-# environments/dev — CONCRETE VALUES (the only place dev's truth lives)
+# environments/dev — CONCRETE VALUES (copy to terraform.tfvars and fill in)
 # -----------------------------------------------------------------------------
-# Safe to commit: subscription id, CIDRs, names. Real secrets never go here.
+# R8 (2026-07-10 review): every root ships a complete, placeholder-valued
+# .example so a fresh clone never inherits a previous deployment's real
+# identifiers. Placeholders below are deliberately invalid/generic — replace
+# every one before applying. See environments/staging/terraform.tfvars.example
+# for the deliberate-omission comment style this file follows.
+#
+# Safe to commit once filled in: subscription id, CIDRs, names. Real secrets
+# never go here (none of these values are secrets).
 # =============================================================================
 
-subscription_id = "17a74f4d-a8f5-4955-9e38-9d222b8ea023"
+subscription_id = "00000000-0000-0000-0000-000000000000" # TODO: set your dev subscription GUID
 
 project       = "dbx" # short token embedded in every resource name — change per project
 environment   = "dev"
@@ -12,14 +19,11 @@ location      = "westus3"
 region_abbrev = "wus3"
 instance      = "001"
 
-# dev convenience; leave false in staging/prod
-kv_purge_on_destroy = true
-
 # ---- Hub (shared-services) lookups — must match what shared-services created --
 # NAT-egress mode (ADR-0007): only the DNS-zone resource group is needed.
 # Left UNSET on purpose (E3): hub_resource_group_name derives from this root's
 # own project/region_abbrev/instance via the naming convention
-# (rg-networking-dbx-shared-wus3-001) — the same hub staging uses. Override
+# (rg-networking-dbx-shared-wus3-001) — the same hub every spoke uses. Override
 # only if this spoke's hub was deployed with different tokens.
 
 # ---- Spoke network sizing ---------------------------------------------------
@@ -28,12 +32,11 @@ host_subnet_prefix       = "10.10.0.0/24"
 container_subnet_prefix  = "10.10.1.0/24"
 pe_subnet_prefix         = "10.10.2.0/26"
 
-# ---- Storage (globally unique; change if the name is taken) -----------------
+# ---- Storage -----------------------------------------------------------------
 # Left UNSET on purpose (E3): derives to "stdbxdevwus3001". Override only if
 # that name is already taken globally.
 
 # ---- Workspace controls (pass 2) ---------------------------------------------
-# Cluster-policy tuning (defaults are fine for dev; shown here for visibility)
 policy_node_types                  = ["Standard_DS3_v2", "Standard_D4ads_v5"]
 policy_max_autotermination_minutes = 60
 policy_max_workers                 = 4
@@ -42,7 +45,14 @@ policy_max_workers                 = 4
 # Account id is at accounts.azuredatabricks.net (an identifier, not a secret).
 # Prerequisite: Automatic Identity Management ENABLED on the account
 # (Security -> User provisioning) and the deployer is an ACCOUNT admin.
-databricks_account_id = "00000000-0000-0000-0000-000000000000" # REQUIRED before deploy: your Databricks account ID from accounts.azuredatabricks.net (top-right) — plan fails until set. Must be IDENTICAL across shared-services/dev/staging.
+# REQUIRED before deploy: your Databricks account ID from
+# accounts.azuredatabricks.net (top-right) — plan fails until set. Must be
+# IDENTICAL across shared-services/dev/staging.
+databricks_account_id = "00000000-0000-0000-0000-000000000000"
+
+# Left UNSET on purpose: defaults to "azure-cli" (rides `az login` locally).
+# CI overrides via TF_VAR_databricks_account_auth_type = "github-oidc-azure".
+# databricks_account_auth_type = "azure-cli"
 
 # Map keys are immutable handles (never rename them — ADR-0008); rename the
 # display name via role_token instead. Membership is authoritative: this list
@@ -50,7 +60,7 @@ databricks_account_id = "00000000-0000-0000-0000-000000000000" # REQUIRED before
 identity_groups = {
   admins = {
     role_token           = "admins"
-    members              = ["sushruth.aeluguri@techfabric.com"]
+    members              = ["user@example.com"] # TODO: at least one real account admin UPN
     workspace_permission = "ADMIN"
   }
   users = {
@@ -133,19 +143,35 @@ warehouse_cluster_size   = "2X-Small"
 warehouse_auto_stop_mins = 10
 
 # ---- Lakebase (managed Postgres / OLTP; ADR-0013) ---------------------------
-# OPT-IN per environment: lakebase_enabled = false creates nothing. dev turns it
-# on; staging/prod set their own value when (if) they need OLTP.
-# Right-sized + cheap for dev: smallest capacity, minimum retention, running.
-# Flip lakebase_stopped = true to pause (storage-only billing) when idle.
-# Access is GROUPS only; admins are implicit. engineers manage, others use.
+# OPT-IN per environment: lakebase_enabled = false creates nothing. dev
+# typically turns it on; staging/prod set their own value when (if) they need
+# OLTP. Right-sized + cheap for dev: smallest capacity, minimum retention,
+# running. Flip lakebase_stopped = true to pause (storage-only billing) when
+# idle. Access is GROUPS only; admins are implicit. engineers manage, others
+# use.
 lakebase_enabled        = true
 lakebase_capacity       = "CU_1"
 lakebase_retention_days = 2
 lakebase_stopped        = false
 lakebase_can_manage     = ["engineers"]
 lakebase_can_use        = ["users", "bi_users"]
-# Preserves the previous hardcoded behavior (clean teardown, no lingering storage).
-lakebase_purge_on_delete = true
+
+# Left UNSET on purpose: defaults to false. dev convenience: true purges the
+# Lakebase managed-Postgres instance's storage on `terraform destroy` instead
+# of leaving it behind.
+# lakebase_purge_on_delete = false
+
+# ---- Serverless network connectivity (NCC, ADR-0012) -------------------------
+# Left UNSET on purpose: defaults to false. Two-phase NCC approval (ADR-0012):
+# apply #1 creates the NCC + private-endpoint rules (connections land
+# PENDING); flip this to true and apply #2 to have Terraform (azapi) approve
+# them. Flip to true after the first full apply.
+# ncc_approval_enabled = false
+
+# ---- Key Vault ----------------------------------------------------------------
+# Left UNSET on purpose: defaults to false. dev convenience: true purges the
+# Key Vault (instead of soft-delete retention) on `terraform destroy`.
+# kv_purge_on_destroy = false
 
 # ---- Tags (required set on every resource) ----------------------------------
 tags = {
