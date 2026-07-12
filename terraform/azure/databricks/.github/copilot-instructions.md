@@ -11,12 +11,15 @@ load-bearing rules to keep in mind on every change:
   deployment boundary (`environments/<env>` and `shared-services` each own theirs).
 - Cross-state dependencies are resolved with **Azure data sources looked up by
   name** — never `terraform_remote_state`, never hardcoded resource IDs. The
-  naming convention `{type}-{workload}-{env}-{region}-{instance}` is a contract.
-- Networking is hub-spoke with forced tunneling to the hub firewall and
-  private endpoints + linked Private DNS zones for every PaaS service.
+  naming convention `{type}-{project}-{env}-{region}-{instance}` is a contract.
+- Networking is hub-spoke with exactly one egress mode per spoke (ADR-0007):
+  forced tunneling to the hub firewall (prod posture; firewall optional via
+  `deploy_firewall`) or spoke NAT Gateway + NSG service-tag allowlist (dev
+  default) — plus private endpoints + linked Private DNS zones for every PaaS
+  service in both modes.
 - Databricks: SCC (no public IP), **back-end** Private Link for the compute plane;
-  the front-end is internet-reachable, gated by Entra ID + workspace IP access lists
-  (no front-end Private Link). Data/secret planes stay private. Cluster policies
+  the front-end is internet-reachable, gated by Entra ID (no front-end Private Link,
+  no workspace IP access lists — ADR-0010). Data/secret planes stay private. Cluster policies
   enforce VNet injection + SCC. The Unity Catalog metastore is account-level
   (one per region) and lives in `shared-services`, not an environment root.
 - Data access is **secretless**: Access Connector with a user-assigned managed

@@ -1,6 +1,9 @@
 # ADR-0004: NAT Gateway on the firewall subnet (non-zonal firewall)
 
-- **Status:** Accepted
+- **Status:** Accepted — **dormant since
+  [ADR-0007](0007-nat-gateway-nsg-egress-for-dev.md)** (2026-07-07): the firewall chain
+  this decision configures is deployed only when `shared-services` sets
+  `deploy_firewall = true`. The decision below still governs that (optional) path.
 - **Date:** 2026-06-30
 - **Deciders:** Platform (learning build)
 

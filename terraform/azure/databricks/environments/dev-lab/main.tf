@@ -6,7 +6,6 @@
 # What it KEEPS (every free security control):
 #   - SCC / no_public_ip on the workspace
 #   - secretless data access (Access Connector UAMI + narrow RBAC)
-#   - workspace IP access list (workspace.tf)
 #   - storage/Key Vault default-DENY firewalls with an explicit allowlist
 #   - $150 budget with 50/80/100% notifications
 # Trade-off, stated plainly: the data plane traverses PUBLIC endpoints, gated by
@@ -27,8 +26,8 @@
 locals {
   common_tags = var.tags
 
-  # Naming convention (API contract): {type}-{workload}-{env}-{region}-{instance}
-  name_suffix = "${var.environment}-${var.region_abbrev}-${var.instance}"
+  # Naming convention (API contract): {type}-{project}-{env}-{region}-{instance}
+  name_suffix = "${var.project}-${var.environment}-${var.region_abbrev}-${var.instance}"
 
   # Medallion layers + a dedicated container for UC MANAGED table storage:
   # auto-provisioned metastores have no metastore-level root, so the `lab`
@@ -88,7 +87,7 @@ module "key_vault" {
 
   resource_group_name = azurerm_resource_group.security.name
   location            = var.location
-  key_vault_name      = "kv-dbx-${local.name_suffix}"
+  key_vault_name      = "kv-${local.name_suffix}"
   tenant_id           = data.azurerm_client_config.current.tenant_id
 
   # Same lab exposure pattern as storage (trusted Azure services bypass covers
@@ -105,8 +104,8 @@ module "identity" {
 
   resource_group_name         = azurerm_resource_group.security.name
   location                    = var.location
-  user_assigned_identity_name = "id-dbx-connector-${local.name_suffix}"
-  access_connector_name       = "dbac-dbx-${local.name_suffix}"
+  user_assigned_identity_name = "id-connector-${local.name_suffix}"
+  access_connector_name       = "dbac-${local.name_suffix}"
 
   tags = local.common_tags
 }
@@ -119,14 +118,14 @@ module "identity" {
 # so an inline resource with no network parameters is simpler and keeps the
 # module's secure contract intact. SCC (no_public_ip) is kept — it is free.
 resource "azurerm_databricks_workspace" "this" {
-  name                        = "dbw-dbx-${local.name_suffix}"
+  name                        = "dbw-${local.name_suffix}"
   resource_group_name         = azurerm_resource_group.databricks.name
   location                    = var.location
-  sku                         = "premium" # UC, IP access lists, serverless all need premium
+  sku                         = "premium" # UC and serverless need premium
   managed_resource_group_name = "rg-dbw-managed-${local.name_suffix}"
 
-  # Front-end reachable over the internet, gated by Entra ID + the IP access
-  # list in workspace.tf (same front-end posture as the secure build).
+  # Front-end reachable over the internet, gated by Entra ID (same front-end
+  # posture as the secure build — ADR-0010, no IP access list).
   public_network_access_enabled = true
 
   custom_parameters {
@@ -152,7 +151,7 @@ resource "azurerm_role_assignment" "connector_blob_contributor" {
 # Budget guardrail — the control that makes "$150/month" enforceable in code
 # ---------------------------------------------------------------------------
 resource "azurerm_consumption_budget_subscription" "lab" {
-  name            = "budget-dbx-${local.name_suffix}-monthly"
+  name            = "budget-${local.name_suffix}-monthly"
   subscription_id = "/subscriptions/${var.subscription_id}"
 
   amount     = var.budget_amount

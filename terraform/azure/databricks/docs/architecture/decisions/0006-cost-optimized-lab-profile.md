@@ -1,6 +1,6 @@
 # ADR-0006: Cost-optimized `dev-lab` profile
 
-- **Status:** Accepted (2026-07-02 — `environments/dev-lab/` built per the design doc)
+- **Status:** Accepted (2026-07-02 — `environments/dev-lab/` built per the design doc; the workspace IP access list clause is superseded by ADR-0010)
 - **Date:** 2026-07-01
 - **Deciders:** Platform (learning build)
 

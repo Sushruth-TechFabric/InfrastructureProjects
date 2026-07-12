@@ -16,7 +16,7 @@
 ---
 
 ## 1. Structure & state
-- `modules/` = reusable blueprints (no env values). `environments/{dev,qa,prod}/` and
+- `modules/` = reusable blueprints (no env values). `environments/{dev,staging,prod}/` and
   `shared-services/` = root configs, **each with its own state file**.
 - Backend is Azure Storage with **blob-lease locking** (no extra infra needed):
   ```hcl
@@ -33,7 +33,7 @@
   via `Storage Blob Data Contributor` at container scope), then no public access + private
   endpoint, soft delete + versioning, TLS-only, and a `CanNotDelete` lock.
 - If a run dies mid-apply and leaves a stale lease: `terraform force-unlock <LOCK_ID>`.
-- **Do not** use CLI workspaces as the dev/qa/prod boundary — weak isolation (one
+- **Do not** use CLI workspaces as the dev/staging/prod boundary — weak isolation (one
   `workspace select` mistake = wrong env). Use separate root configs + state keys.
 
 ## 2. Variables & tfvars
@@ -44,8 +44,8 @@
     type        = string
     description = "Deployment environment."
     validation {
-      condition     = contains(["dev", "qa", "prod"], var.environment)
-      error_message = "environment must be dev, qa, or prod."
+      condition     = contains(["dev", "staging", "prod"], var.environment)
+      error_message = "environment must be dev, staging, or prod."
     }
   }
   ```
@@ -74,7 +74,7 @@ terraform {
   required_version = "~> 1.9"
   required_providers {
     azurerm    = { source = "hashicorp/azurerm",    version = "~> 4.0" }
-    databricks = { source = "databricks/databricks", version = "~> 1.50" }
+    databricks = { source = "databricks/databricks", version = "~> 1.121" }
   }
 }
 ```

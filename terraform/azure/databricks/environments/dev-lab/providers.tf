@@ -8,14 +8,14 @@
 #
 # Two providers, two scopes:
 #   - azurerm    -> the Azure infra layer (workspace, storage, KV, identity, budget)
-#   - databricks -> WORKSPACE-scoped controls (IP access list, cluster policy,
-#                   cluster, warehouse, Unity Catalog objects). Authenticates
+#   - databricks -> WORKSPACE-scoped controls (cluster policy, cluster,
+#                   warehouse, Unity Catalog objects). Authenticates
 #                   through Azure (`az login`) against the workspace this root
 #                   creates — no PATs, no stored secrets.
 #
 # ORDERING (read before first apply — full steps in this folder's README.md):
-# databricks-provider resources need the workspace to EXIST and your IP to be
-# able to reach it. On a fresh subscription run a two-phase apply:
+# databricks-provider resources need the workspace to EXIST. On a fresh
+# subscription run a two-phase apply:
 #   terraform apply "-target=azurerm_databricks_workspace.this"   # infra first
 #   terraform apply                                               # then the rest
 # (keep the quotes around -target/-backend-config args — portable across shells)
@@ -31,7 +31,7 @@ terraform {
     }
     databricks = {
       source  = "databricks/databricks"
-      version = "~> 1.50"
+      version = "~> 1.121"
     }
   }
 }

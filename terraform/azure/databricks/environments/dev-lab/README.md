@@ -13,7 +13,7 @@ infrastructure. Your state, your workspace, your budget.
 
 | Component | Detail | Idle cost |
 | --- | --- | --- |
-| Databricks workspace (premium) | SCC on, front-end gated by Entra ID + IP access list | $0 |
+| Databricks workspace (premium) | SCC on, front-end gated by Entra ID (ADR-0010) | $0 |
 | ADLS Gen2 | `bronze` / `silver` / `gold` / `catalog` containers, default-deny firewall | ~$1–3 |
 | Unity Catalog | `lab` catalog, `raw` + `curated` schemas, secretless via Access Connector | $0 |
 | Single-node cluster | `lab-practice`, auto-terminates (20 min), policy-locked | $0 when terminated |
@@ -21,10 +21,13 @@ infrastructure. Your state, your workspace, your budget.
 | Key Vault | RBAC-authorized, default-deny firewall | ~$0–1 |
 | Budget alerts | 50% / 80% / 100% actual + 100% forecasted → your inbox | $0 |
 
-**What it deliberately omits** (the ~$730/month delta vs the secure `dev` root): hub
-firewall, NAT Gateway, VNet injection, private endpoints + private DNS. The data plane
-traverses **public endpoints behind default-deny firewalls + identity** — fine for a lab,
-explicitly NOT the client posture.
+**What it deliberately omits** vs the secure `dev` root: VNet injection, NAT Gateway,
+private endpoints + private DNS — a **~$65/month delta** since
+[ADR-0007](../../docs/architecture/decisions/0007-nat-gateway-nsg-egress-for-dev.md)
+dropped the always-on hub firewall from dev too (the delta was ~$730/month against the
+full firewall posture, still available via `deploy_firewall = true`). The lab's data
+plane traverses **public endpoints behind default-deny firewalls + identity** — fine for
+a lab, explicitly NOT the client posture.
 
 ## Prerequisites
 
@@ -96,9 +99,11 @@ Both copies are **gitignored** (they are yours, not the repo's). Fill them in:
 - `terraform.tfvars` —
   - `subscription_id`: from step 1.
   - `storage_account_name`: globally unique — include your initials.
-  - `allowed_ip_addresses`: your public IP (`curl ifconfig.me`). **Prefer a small CIDR
-    range over a single IP** — if your ISP rotates your address, a one-IP list locks you
-    out of the workspace (see Troubleshooting). No `/31` or `/32` CIDRs.
+  - `allowed_ip_addresses`: your public IP (`curl ifconfig.me`) for the storage/Key
+    Vault firewalls (the workspace front-end is Entra ID-gated, not IP-gated —
+    ADR-0010). **Prefer a small CIDR range over a single IP** — if your ISP rotates
+    your address, a one-IP list locks you out of storage/Key Vault. No `/31` or
+    `/32` CIDRs.
   - `budget_contact_emails`: where the $75/$120/$150 alerts go.
   - `tags.Owner`: your email.
 
@@ -121,11 +126,16 @@ Expect a warning about `-target` — that's the point; it is intentional here.
 
 ### 6. Preflight — confirm Unity Catalog is attached
 
-Open the workspace (portal → the `dbw-dbx-lab-...` resource → Launch Workspace) and click
+Open the workspace (portal → the `dbw-{project}-lab-...` resource → Launch Workspace) and click
 **Catalog** in the sidebar. If you can browse catalogs, the regional default metastore
 auto-attached — continue. If Catalog is missing/empty (older Databricks account), attach a
 metastore once via [accounts.azuredatabricks.net](https://accounts.azuredatabricks.net)
 (Catalog → create/assign metastore for your region), then continue.
+
+> Since ADR-0011, the regional metastore is Terraform-managed in
+> `shared-services` and shows up as `mst-dbx-shared-wus3-001`. Nothing changes
+> for dev-lab — auto-attach still applies and this root still manages no
+> metastore.
 
 ### 7. Phase 2 — everything else
 
@@ -133,7 +143,7 @@ metastore once via [accounts.azuredatabricks.net](https://accounts.azuredatabric
 terraform apply
 ```
 
-This applies the IP access list, cluster policy + cluster, SQL warehouse, and the Unity
+This applies the cluster policy + cluster, SQL warehouse, and the Unity
 Catalog chain. **If it fails with a 403 on the storage credential**: the role assignment
 from phase 2 hasn't propagated yet (takes a few minutes). Just run `terraform apply`
 again — it is safe and picks up where it left off.
@@ -190,7 +200,7 @@ terraform destroy
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | 403 creating `databricks_storage_credential` | RBAC propagation lag on the UAMI role assignment | Wait 2–5 min, re-run `terraform apply` |
-| Workspace says your IP is not allowed | Your egress IP changed (ISP rotation) | From any allowed IP/VPN: fix `allowed_ip_addresses`, `terraform apply`. Fully locked out? `terraform destroy "-target=azurerm_databricks_workspace.this"` then redo steps 5–7 (lab data in ADLS is untouched; workspace-local state like notebooks is lost — keep notebooks in Git) |
+| Storage/Key Vault access denied from your machine | Your egress IP changed (ISP rotation) and fell off the firewall allowlists | Fix `allowed_ip_addresses` in tfvars, `terraform apply` (the workspace front-end itself is Entra ID-gated, not IP-gated — you can always reach it to work) |
 | `enable_serverless_compute` unsupported error | Serverless not enabled for your account/region | Set `enable_serverless = false` in tfvars — classic PRO warehouse, same auto-stop |
 | Catalog sidebar empty after phase 1 | Older account without auto-UC | Attach a metastore once via accounts.azuredatabricks.net (step 6), re-apply |
 | Storage account name taken | Names are globally unique | Pick another `storage_account_name` |
@@ -200,9 +210,10 @@ terraform destroy
 
 ## Guardrails you should NOT remove
 
-- `no_public_ip = true` (SCC), the IP access lists, default-deny firewalls, the budget —
-  they are all **free**. Removing them saves $0 and reopens the exact holes this design
-  documents closing.
+- `no_public_ip = true` (SCC), the default-deny storage/Key Vault firewalls, the
+  budget — they are all **free**. Removing them saves $0 and reopens the exact holes
+  this design documents closing. (The workspace front-end IP access list was
+  deliberately removed by ADR-0010 — front-end gating is Entra ID only.)
 - The cluster policy fixes `autotermination_minutes`. If a colleague asks to disable
   auto-termination, the answer is the policy itself: that request is how $450/month
   clusters happen.

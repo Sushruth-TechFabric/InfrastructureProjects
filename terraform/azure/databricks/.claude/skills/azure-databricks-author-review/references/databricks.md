@@ -41,17 +41,23 @@
   access" decision — identity is the perimeter, and it keeps GitHub-hosted CI runners able
   to reach the REST API.)
 - **Front-end hardening is MUST, because it is internet-reachable:**
-  - **Workspace IP access lists** — allow only known egress ranges (corporate / VPN / CI),
-    deny the rest.
   - **Entra ID Conditional Access** — MFA, device/compliance, ideally trusted-location.
+  - **Workspace IP access lists are deliberately NOT used** (ADR-0010) — identity is the
+    perimeter; IP allowlists added lockout risk without changing the trust model.
 - The **compute plane stays fully private** (SCC, no public IP, back-end Private Link) and
   **data + secrets stay private** (storage / Key Vault private endpoints, public access
   off). Internet exposure is limited to the authenticated front-end control surface only.
 
 ## 4. Egress allowlist
-- With forced tunneling, the hub firewall must allow the required outbound endpoints
-  (SCC relay, control plane, web app, metastore, artifact/log storage) per region, or
-  clusters fail to start. Use the region-specific address list from Microsoft.
+- The required outbound endpoints (SCC relay, control plane, web app, metastore,
+  artifact/log storage) must be allowed per region, or clusters fail to start:
+  - **Firewall mode:** in the hub firewall policy — use the region-specific address list
+    from Microsoft.
+  - **NAT mode (dev default, ADR-0007):** as NSG outbound service-tag rules in
+    `modules/networking` (AzureDatabricks 443/3306/8443-8451, AzureActiveDirectory 443,
+    Storage.\<region\> 443, Sql.\<region\> 3306, EventHub.\<region\> 9093 + deny-Internet).
+- The allowlist lives in BOTH places — keep them in sync when Databricks endpoint
+  requirements change.
 
 ## 5. Storage hardening & secretless access
 - ADLS Gen2: disable public access; private endpoints for `blob` + `dfs` with DNS zones;
@@ -94,13 +100,14 @@
 - Under-sizing subnets (then needing a workspace rebuild).
 - Back-end private endpoint without the DNS zone link → cluster can't reach the control plane.
 - Disabling workspace public access on the front-end (this platform keeps it on, gated by
-  Entra ID + IP access lists) → locks out users and GitHub-hosted CI runners.
-- Skipping IP access lists / Conditional Access → the internet-reachable front-end is
-  protected by credentials alone.
+  Entra ID) → locks out users and GitHub-hosted CI runners.
+- Skipping Conditional Access → the internet-reachable front-end is
+  protected by credentials alone (there is no IP access list to fall back on — ADR-0010).
 - Storing storage keys in a secret scope instead of using the Access Connector identity.
 - Granting UC permissions to individuals instead of groups.
 - No cluster policy → users create clusters that bypass the secured network.
-- Forgetting the firewall egress allowlist → clusters hang/fail at launch.
+- Missing egress allowlist entries (firewall rules in firewall mode, NSG service-tag
+  rules in NAT mode) → clusters hang/fail at launch.
 
 ## 11. Documentation links
 - VNet injection: https://learn.microsoft.com/en-us/azure/databricks/security/network/classic/vnet-inject

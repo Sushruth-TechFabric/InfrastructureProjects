@@ -1,0 +1,141 @@
+# =============================================================================
+# environments/staging — CONCRETE VALUES (copy to terraform.tfvars and fill in)
+# -----------------------------------------------------------------------------
+# E7 (2026-07-10 review): this root's *.tf files are a VERBATIM copy of
+# environments/dev — the portability claim ("promotion is a tfvars change, not
+# a code change") only holds if staging never diverges in code. Every
+# dev-vs-staging difference below is a value, not an edit. See
+# docs/design/staging-promotion-notes.md for the (short) list of places a code
+# edit WAS unavoidable.
+#
+# Safe to commit once filled in: subscription id, CIDRs, names. Real secrets
+# never go here (none of these values are secrets).
+# =============================================================================
+
+subscription_id = "00000000-0000-0000-0000-000000000000" # TODO: set your staging subscription GUID
+
+project       = "dbx" # must match shared-services' project token — cross-state lookups are by name
+environment   = "staging"
+location      = "westus3"
+region_abbrev = "wus3"
+instance      = "001"
+
+# ---- Hub (shared-services) lookups ------------------------------------------
+# Left UNSET on purpose (E3): hub_resource_group_name / metastore_name derive
+# from project/region_abbrev/instance above via the naming convention
+# (rg-networking-dbx-shared-wus3-001 / mst-dbx-shared-wus3-001) — the same hub
+# dev uses. Override only if staging's hub was deployed with different tokens.
+
+# ---- Spoke network sizing ---------------------------------------------------
+# Next /20 after dev's 10.10.0.0/20 (non-overlapping — both spokes may need to
+# route to the same hub / hold peering with each other or a firewall later).
+spoke_vnet_address_space = ["10.11.0.0/20"]
+host_subnet_prefix       = "10.11.0.0/24"
+container_subnet_prefix  = "10.11.1.0/24"
+pe_subnet_prefix         = "10.11.2.0/26"
+
+# ---- Storage -----------------------------------------------------------------
+# Left UNSET on purpose (E3): derives to "stdbxstagingwus3001". Override only
+# if that name is already taken globally.
+
+# ---- Workspace controls (pass 2) ---------------------------------------------
+policy_node_types                  = ["Standard_DS3_v2", "Standard_D4ads_v5"]
+policy_max_autotermination_minutes = 60
+policy_max_workers                 = 4
+
+# ---- Identity / workspace access (ADR-0008) ----------------------------------
+# Account id is at accounts.azuredatabricks.net (an identifier, not a secret).
+# Prerequisite: Automatic Identity Management ENABLED on the account
+# (Security -> User provisioning) and the deployer is an ACCOUNT admin.
+databricks_account_id = "00000000-0000-0000-0000-000000000000" # TODO: set your Databricks account GUID
+
+# Map keys are immutable handles (never rename them — ADR-0008); rename the
+# display name via role_token instead. Membership is authoritative: this list
+# IS the group; portal additions are reverted on the next apply.
+identity_groups = {
+  admins = {
+    role_token           = "admins"
+    members              = ["user@example.com"] # TODO: at least one real account admin UPN
+    workspace_permission = "ADMIN"
+  }
+  users = {
+    role_token           = "users"
+    members              = []
+    workspace_permission = "USER"
+  }
+  engineers = {
+    role_token           = "engineers"
+    members              = [] # TODO: add data-engineer UPNs
+    workspace_permission = "USER"
+  }
+  bi_users = {
+    role_token           = "bi_users"
+    members              = [] # TODO: add BI/SQL-user UPNs
+    workspace_permission = "USER"
+  }
+}
+
+# ---- Workspace-object permissions (grants to identity_groups keys, ADR-0009) -
+cluster_policy_can_use = {
+  personal = ["users"]
+  shared   = ["users"]
+}
+
+secret_scope_read_groups = ["users"]
+
+key_vault_secrets_officer_groups = ["admins"]
+
+# ---- Azure-plane RBAC (Reader on the four RGs, to identity_groups keys) ------
+resource_group_reader_groups = ["admins"]
+
+# ---- Unity Catalog: catalogs / schemas as config (add/remove by re-applying) -
+catalogs = {
+  dbx_staging = {
+    comment           = "Staging lakehouse catalog"
+    storage_container = "catalog"
+    schemas = {
+      bronze = { comment = "Raw / landing layer", storage_container = "bronze" }
+      silver = { comment = "Cleaned / conformed layer", storage_container = "silver" }
+      gold   = { comment = "Curated / BI-ready layer", storage_container = "gold" }
+    }
+  }
+}
+
+catalog_grants = {
+  dbx_staging = {
+    engineers = ["USE_CATALOG"]
+    bi_users  = ["USE_CATALOG"]
+  }
+}
+
+schema_grants = {
+  "dbx_staging.bronze" = { engineers = ["USE_SCHEMA", "SELECT", "MODIFY", "CREATE_TABLE"] }
+  "dbx_staging.silver" = { engineers = ["USE_SCHEMA", "SELECT", "MODIFY", "CREATE_TABLE"] }
+  "dbx_staging.gold" = {
+    engineers = ["USE_SCHEMA", "SELECT"]
+    bi_users  = ["USE_SCHEMA", "SELECT"]
+  }
+}
+
+# ---- SQL warehouse (classic, cost-conscious; BI/SQL users) -------------------
+sql_warehouse_can_use    = ["engineers", "bi_users"]
+warehouse_cluster_size   = "2X-Small"
+warehouse_auto_stop_mins = 10
+
+# ---- Lakebase (managed Postgres / OLTP; ADR-0013) ---------------------------
+# OFF in staging: dev proves the feature; staging doesn't need OLTP yet. Flip
+# on the same way dev did (lakebase_enabled = true + the knobs below) if/when
+# staging needs it. NOTE (see staging-promotion-notes.md): lakebase.tf
+# hardcodes purge_on_delete = true with no environment override yet (D5,
+# 2026-07-10 review, not yet implemented) — irrelevant while disabled, but
+# flag it before ever enabling Lakebase in a promoted environment.
+lakebase_enabled = false
+
+# ---- Tags (required set on every resource) ----------------------------------
+tags = {
+  Environment = "staging"
+  Owner       = "data-platform-team"
+  CostCenter  = "cc-staging-1001"
+  ManagedBy   = "terraform"
+  Project     = "azure-databricks-platform"
+}

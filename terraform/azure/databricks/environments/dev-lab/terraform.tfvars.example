@@ -13,7 +13,8 @@ subscription_id = "00000000-0000-0000-0000-000000000000"
 # suffix. 3-24 chars, lowercase letters + digits only.
 storage_account_name = "stdbxlabjdoewus3001"
 
-# Your public egress IP(s): curl ifconfig.me
+# Your public egress IP(s) for the storage/Key Vault firewalls: curl ifconfig.me
+# (Not used for the workspace front-end — that is Entra ID-gated, ADR-0010.)
 # Prefer a small range (e.g. "203.0.113.0/24") over one IP so an ISP address
 # rotation doesn't lock you out. No /31 or /32 CIDRs (Azure Storage rejects
 # them) — bare IPs are fine.
@@ -31,6 +32,7 @@ tags = {
 }
 
 # ---- Optional overrides (defaults shown) ------------------------------------
+# project                  = "dbx"  # short token embedded in every resource name
 # location                 = "westus3"
 # region_abbrev            = "wus3"
 # instance                 = "001"

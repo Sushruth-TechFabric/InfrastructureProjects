@@ -1,33 +1,47 @@
 ---
-name: azure-databricks-iac
+name: azure-databricks-author-review
 description: >-
-  Best practices, guardrails, and command cheatsheets for writing production-grade
-  Infrastructure-as-Code for a secure Azure Databricks platform with Terraform and
-  GitHub Actions. Use this skill WHENEVER the task involves writing, reviewing, or
-  debugging Terraform (.tf/.tfvars), Azure resources (networking, RBAC, Key Vault,
+  Golden rules, guardrails, and pre-flight checklist for AUTHORING or REVIEWING
+  production-grade Infrastructure-as-Code for a secure Azure Databricks platform
+  (Terraform + GitHub Actions). Use WHENEVER the task involves creating, editing, or
+  reviewing Terraform (.tf/.tfvars), Azure resources (networking, RBAC, Key Vault,
   storage, private endpoints), Azure Databricks (workspace, VNet injection, Unity
   Catalog, cluster policies, Access Connector), or GitHub Actions workflows for infra
   deployment — even if the user does not explicitly say "best practices". Trigger on
   mentions of azurerm, databricks provider, remote state, OIDC, VNet injection,
-  private link, managed identity, cluster policy, or any *.tf authoring/review.
+  private link, managed identity, cluster policy, or any *.tf authoring/review. Runs
+  as an isolated Sonnet sub-review so guardrails are enforced consistently regardless
+  of the session's model. For quick command/syntax/naming-convention/doc-link lookups
+  with no authoring or review involved, use azure-databricks-lookup instead — it's
+  cheaper and doesn't fork.
+context: fork
+model: sonnet
+agent: general-purpose
 ---
 
-# Azure Databricks Platform — IaC Skill
+# Azure Databricks Platform — Author & Review
 
-Authoritative guardrails for building this platform safely. The full architecture
-decisions live in `docs/architecture/azure-platform-architecture.md` (the project's
-source of truth). This skill is the *operational* layer: how to write the code without
-violating those decisions, plus per-tool command cheatsheets and doc links.
+You are authoring or reviewing Infrastructure-as-Code for this secure Azure
+Databricks platform. The full architecture decisions live in
+`docs/architecture/azure-platform-architecture.md` (the project's source of truth) —
+read it if the task touches networking, identity, or Unity Catalog topology. This
+skill is the *operational* layer: how to write or review the code without violating
+those decisions, plus per-tool command cheatsheets and doc links.
 
-## How to use this skill
+## Task
+
+$ARGUMENTS
+
+## How to work
 
 1. Read the **Golden rules** below — they apply to every infra change.
-2. For the specific task, read the matching reference file (only the relevant one):
+2. Load only the reference file(s) relevant to the task:
    - Writing/refactoring Terraform, state, modules, variables → `references/terraform.md`
    - Azure resources: networking, RBAC, Key Vault, storage, DNS, policy → `references/azure.md`
    - Databricks workspace, VNet injection, Unity Catalog, cluster policies → `references/databricks.md`
    - CI/CD pipelines, OIDC auth, approval gates → `references/github-actions.md`
-3. Before proposing a change, run the **Pre-flight checklist**.
+3. Make the change (or produce the review), then run the **Pre-flight checklist**
+   before reporting done.
 
 ## Golden rules (apply always — MUST)
 
@@ -50,9 +64,9 @@ violating those decisions, plus per-tool command cheatsheets and doc links.
 7. **Databricks compute/data planes stay sealed; front-end is identity-gated.** SCC on
    (no public IP), VNet injection, **back-end Private Link** for the compute plane. The
    **front-end stays internet-reachable** (workspace public access enabled), gated by
-   **Entra ID + workspace IP access lists + Conditional Access** — no front-end Private
-   Link, no user VNet path. Data and secret planes stay fully private. Cluster policies
-   force every cluster to inherit the secured network.
+   **Entra ID + Conditional Access** — no front-end Private Link, no user VNet path, no
+   workspace IP access lists (ADR-0010). Data and secret planes stay fully private.
+   Cluster policies force every cluster to inherit the secured network.
 8. **Identity over secrets.** User-assigned managed identities by default; data access
    via Access Connector identity + `Storage Blob Data Contributor` (no keys). CI/CD via
    OIDC federated credential scoped to repo+branch. Never grant `Owner` to automation.
@@ -62,7 +76,7 @@ violating those decisions, plus per-tool command cheatsheets and doc links.
 10. **Least privilege RBAC.** Narrowest scope, most specific built-in role, assign to
     Entra ID groups not individuals.
 
-## Pre-flight checklist (run before proposing any change)
+## Pre-flight checklist (run before reporting any change as done)
 
 - [ ] `terraform fmt` clean and `terraform validate` passes.
 - [ ] No secret or environment-specific value baked into a module or committed file.

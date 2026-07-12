@@ -28,10 +28,10 @@
   ephemeral token is sensitive, and it's never stored.
 
 ## 3. Environment approval gates
-- Define `dev`, `qa`, `prod` as **GitHub Environments**. On `prod`, add a **required
+- Define `dev`, `staging`, `prod` as **GitHub Environments**. On `prod`, add a **required
   reviewers** protection rule so the apply job pauses for a named human before running.
 - This is the *apply-time* gate (timing/accountability), separate from PR review (content).
-  Both guard different risks. dev/qa flow automatically; prod waits.
+  Both guard different risks. dev/staging flow automatically; prod waits.
 
 ## 4. PR validation pipeline
 Run on every PR, before human review, to shift failures left:

@@ -13,6 +13,12 @@
 > The **secure enterprise** build (`shared-services` + `environments/dev`) remains the
 > primary learning track and the architectural reference. This lab is a deliberate,
 > documented downgrade for daily practice on a personal budget.
+>
+> **Update (2026-07-07, [ADR-0007](../architecture/decisions/0007-nat-gateway-nsg-egress-for-dev.md)):**
+> the secure `dev` root now defaults to **NAT Gateway + NSG egress** (no Azure Firewall)
+> and idles at ~$70/month. The "~$730+/mo" comparisons and the "$4–6 ephemeral session"
+> playbook below describe the pre-ADR-0007 **firewall posture**, which still exists
+> behind `deploy_firewall = true` in shared-services.
 
 ---
 
@@ -62,8 +68,8 @@ secure config pristine as the reference implementation.
 | VNet injection + forced tunneling | ✗ (managed VNet) | ✓ |
 | Private endpoints + private DNS | ✗ | ✓ |
 | SCC (`no_public_ip`) | ✓ **kept — free** | ✓ |
-| Front-end | public + **IP access list** | public + IP access list |
-| Workspace SKU | premium (UC, IP lists, serverless) | premium |
+| Front-end | public, Entra ID-gated (ADR-0010) | public, Entra ID-gated (ADR-0010) |
+| Workspace SKU | premium (UC, serverless) | premium |
 | Secretless data access (Access Connector UAMI) | ✓ **kept** | ✓ |
 | Storage/KV public network access | **enabled** (default-deny + allowlist) | disabled |
 | Unity Catalog | ✓ via auto-enabled metastore | later (shared-services pass) |
@@ -103,17 +109,18 @@ firewall*, not *open*.
 
 ## 5. Lab root contents (build list)
 
-- `providers.tf` — `azurerm ~> 4.0` **and** `databricks ~> 1.50` (workspace-scoped, auth
+- `providers.tf` — `azurerm ~> 4.0` **and** `databricks ~> 1.121` (workspace-scoped, auth
   via `azure_workspace_resource_id` → uses `az login`; no PATs). TF `>= 1.9, < 2.0`.
 - `backend.tf` — azurerm backend, key `environments/dev-lab/terraform.tfstate` (own state;
   can share the dev bootstrap storage account).
 - `variables.tf` / `terraform.tfvars` — subscription_id; `westus3`/`wus3`;
   `storage_account_name` (e.g. `stdbxlabwus3001`); tags (`Environment = "lab"`);
-  `allowed_ip_addresses` (list; your home/VPN egress IPs); `cluster_node_type`
+  `allowed_ip_addresses` (list; your home/VPN egress IPs — storage/KV firewalls
+  only, not the workspace front-end); `cluster_node_type`
   (`Standard_DS3_v2`); `autotermination_minutes` (20); `enable_serverless` (true);
   `warehouse_auto_stop_mins` (10); `budget_amount` (150); `budget_contact_emails`.
 - `main.tf` —
-  - RGs: `rg-databricks-lab-wus3-001`, `rg-storage-lab-wus3-001`, `rg-security-lab-wus3-001`.
+  - RGs: `rg-databricks-dbx-lab-wus3-001`, `rg-storage-dbx-lab-wus3-001`, `rg-security-dbx-lab-wus3-001`.
   - `module "storage"` (public access **true**, default-deny, IP rules), filesystems
     `["bronze", "silver", "gold"]`; `module "key_vault"` (same override); `module "identity"`.
   - Inline `azurerm_databricks_workspace`: `sku = "premium"`,
@@ -123,8 +130,6 @@ firewall*, not *open*.
   - `azurerm_consumption_budget_subscription`: `budget_amount`, notifications at 50/80/100%
     (100% forecasted too) → `budget_contact_emails`.
 - `workspace.tf` (databricks provider) —
-  - `databricks_workspace_conf` `enableIpAccessLists = true` +
-    `databricks_ip_access_list` (ALLOW `allowed_ip_addresses`).
   - `databricks_cluster_policy` "lab-personal": single node, `node_type_id` allowlist
     (small only), `autotermination_minutes` **fixed** (cannot be disabled), latest LTS
     runtime, `data_security_mode = SINGLE_USER` (UC-enabled).

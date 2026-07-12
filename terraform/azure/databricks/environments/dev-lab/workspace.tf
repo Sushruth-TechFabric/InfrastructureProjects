@@ -1,33 +1,16 @@
 # =============================================================================
 # environments/dev-lab — WORKSPACE CONTROLS (databricks provider)
 # -----------------------------------------------------------------------------
-# Everything here needs the workspace to EXIST and be reachable from YOUR IP —
+# Everything here needs the workspace to EXIST —
 # see the two-phase apply note in providers.tf / README.md.
 #
-# LOCKOUT WARNING: if you apply the IP access list from an IP that is not in
-# `allowed_ip_addresses`, you lock yourself AND Terraform out (the provider
-# talks to the same front-end). Your current egress IP MUST be in the list.
+# The front-end is internet-reachable, gated by Entra ID. The workspace IP
+# access list that used to narrow it further was removed by ADR-0010.
+# (`allowed_ip_addresses` still gates the storage/Key Vault firewalls — main.tf.)
 # =============================================================================
 
 # ---------------------------------------------------------------------------
-# 1. Front-end IP access list (feature flag first, then the ALLOW list)
-# ---------------------------------------------------------------------------
-resource "databricks_workspace_conf" "this" {
-  custom_config = {
-    "enableIpAccessLists" = "true"
-  }
-}
-
-resource "databricks_ip_access_list" "allowed" {
-  label        = "allowed-egress-ips"
-  list_type    = "ALLOW"
-  ip_addresses = var.allowed_ip_addresses
-
-  depends_on = [databricks_workspace_conf.this]
-}
-
-# ---------------------------------------------------------------------------
-# 2. Cluster policy — the guardrail that makes runaway compute IMPOSSIBLE
+# 1. Cluster policy — the guardrail that makes runaway compute IMPOSSIBLE
 # ---------------------------------------------------------------------------
 # Everything cost-dangerous is `fixed` (user cannot change it in the UI):
 #   - single node (num_workers 0), small VM allowlist, no Photon (2x DBU)
@@ -63,7 +46,7 @@ resource "databricks_cluster_policy" "lab_personal" {
 }
 
 # ---------------------------------------------------------------------------
-# 3. The practice cluster (single node, under the policy)
+# 2. The practice cluster (single node, under the policy)
 # ---------------------------------------------------------------------------
 # A TERMINATED cluster costs $0 — its definition just sits in the workspace,
 # pinned so the UI never garbage-collects it. NOTE: creating it starts it once
@@ -100,7 +83,7 @@ resource "databricks_cluster" "practice" {
 }
 
 # ---------------------------------------------------------------------------
-# 4. SQL warehouse — serverless 2X-Small, aggressive auto-stop
+# 3. SQL warehouse — serverless 2X-Small, aggressive auto-stop
 # ---------------------------------------------------------------------------
 # Serverless: zero idle cost, ~seconds to start. If your account/region lacks
 # serverless, set enable_serverless = false to fall back to a classic PRO
@@ -116,7 +99,7 @@ resource "databricks_sql_endpoint" "lab" {
 }
 
 # ---------------------------------------------------------------------------
-# 5. Databricks-backed secret scope for practice secrets
+# 4. Databricks-backed secret scope for practice secrets
 # ---------------------------------------------------------------------------
 # For real platform secrets the pattern is a KEY-VAULT-BACKED scope (see the
 # secure root). This lab keeps a plain Databricks-backed scope for throwaway

@@ -13,13 +13,13 @@
 #      control plane can never connect inward.
 #
 #   3. FRONT-END STAYS PUBLIC (public_network_access_enabled = true) — by design.
-#      Users/CI reach the workspace UI+API over the internet, gated by Entra ID +
-#      (added later) IP access lists. We do NOT deploy front-end Private Link.
+#      Users/CI reach the workspace UI+API over the internet, gated by Entra ID
+#      (no IP access lists — ADR-0010). We do NOT deploy front-end Private Link.
 #      The BACK-END Private Link (clusters -> control plane) is a private endpoint
 #      created in the environment root on the PE subnet.
 #
-# sku MUST be "premium" — Unity Catalog, cluster policies, IP access lists, and
-# private link are all premium-tier features.
+# sku MUST be "premium" — Unity Catalog, cluster policies, and private link are
+# all premium-tier features.
 # =============================================================================
 
 resource "azurerm_databricks_workspace" "this" {

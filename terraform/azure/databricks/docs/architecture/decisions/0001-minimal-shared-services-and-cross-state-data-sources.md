@@ -1,6 +1,13 @@
 # ADR-0001: Minimal shared-services + cross-state via Azure data sources
 
-- **Status:** Accepted
+- **Status:** Accepted — **partially superseded by
+  [ADR-0007](0007-nat-gateway-nsg-egress-for-dev.md)** (2026-07-07): the hub firewall
+  chain is now optional (`deploy_firewall`, default off) and dev no longer peers to the
+  hub or resolves the firewall; dev's only hub dependency is the four Private DNS zones.
+  The cross-state-by-name mechanism (the core of this ADR) is unchanged.
+  **Also partially superseded by [ADR-0008](0008-aim-identity-layer.md)** (2026-07-10):
+  the Entra→account group sync named in this ADR's follow-ups is implemented via AIM and
+  owned by each environment root, not shared-services; the metastore follow-up stands.
 - **Date:** 2026-06-30
 - **Deciders:** Platform (learning build)
 
@@ -34,10 +41,11 @@ doc's cross-state rules (no `terraform_remote_state`, no hardcoded resource IDs)
 - **Trade-offs:** deploy ordering is now load-bearing — `shared-services` must be
   applied before dev, or dev's data sources 404. The hub names are a contract:
   renaming a hub resource breaks every spoke that looks it up.
-- **Follow-ups:** qa/prod repeat the same pattern; the UC account-level metastore
-  and Entra→account group sync still belong in `shared-services` (future pass).
+- **Follow-ups:** staging/prod repeat the same pattern; the UC account-level metastore
+  still belongs in `shared-services` (future pass). ~~Entra→account group sync~~ —
+  done differently: AIM + env-owned groups (ADR-0008).
 
 ## References
 
 - `docs/architecture/azure-platform-architecture.md` §1 (cross-state dependencies)
-- `.claude/skills/azure-databricks-iac/references/terraform.md` §5
+- `.claude/skills/azure-databricks-author-review/references/terraform.md` §5

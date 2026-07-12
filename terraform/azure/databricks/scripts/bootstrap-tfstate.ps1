@@ -5,13 +5,13 @@
     problem: Terraform needs a backend to store state, but the backend itself
     cannot be created by Terraform without already having one.
 
-    Run this ONCE per deployment boundary (dev / qa / prod / shared-services)
+    Run this ONCE per deployment boundary (dev / staging / prod / shared-services)
     BEFORE the first `terraform init` for that boundary.
 
 .DESCRIPTION
-    Creates, per the platform naming convention {type}-{workload}-{env}-{region}-{instance}:
-      - rg-tfstate-<env>-<regionAbbrev>-<instance>
-      - st tfstate <env> <regionAbbrev> <instance>   (<=24 chars, lowercase+digits)
+    Creates, per the platform naming convention {type}-{project}-{env}-{region}-{instance}:
+      - rg-tfstate-<project>-<env>-<regionAbbrev>-<instance>
+      - st tfstate <project> <env> <regionAbbrev> <instance>   (<=24 chars, lowercase+digits)
       - a blob container (default: tfstate)
 
     Security posture applied here:
@@ -29,8 +29,13 @@
       - public-network-access Disabled (only safe once the PE exists; otherwise
         nothing — not your CLI, not CI — can reach the backend).
 
+.PARAMETER Project
+    Short project/workload token embedded in the resource names (e.g. dbx),
+    2-8 lowercase letters/digits. Lets the same script serve multiple projects
+    without name collisions. Default: dbx.
+
 .PARAMETER Environment
-    dev | qa | prod | shared | dev-lab. Drives the resource names.
+    dev | staging | prod | shared | dev-lab. Drives the resource names.
     dev-lab is the per-person cost-optimized lab (ADR-0006) — each teammate
     runs this against their OWN subscription.
 
@@ -74,6 +79,10 @@
     ./scripts/bootstrap-tfstate.ps1 -Environment dev -Location eastus2
 
 .EXAMPLE
+    # Reuse for another project: the token lands in every derived name.
+    ./scripts/bootstrap-tfstate.ps1 -Project acme -Environment dev -Location eastus2
+
+.EXAMPLE
     ./scripts/bootstrap-tfstate.ps1 -Environment prod -Location eastus2 `
         -AllowedIpAddress '203.0.113.10','198.51.100.0/24'
 
@@ -84,8 +93,11 @@
 
 [CmdletBinding()]
 param(
+    [ValidatePattern('^[a-z0-9]{2,8}$')]
+    [string]$Project = 'dbx',
+
     [Parameter(Mandatory)]
-    [ValidateSet('dev', 'qa', 'prod', 'shared', 'dev-lab')]
+    [ValidateSet('dev', 'staging', 'prod', 'shared', 'dev-lab')]
     [string]$Environment,
 
     [Parameter(Mandatory)]
@@ -147,7 +159,7 @@ $ctx = az account show -o json 2>$null | ConvertFrom-Json
 if (-not $ctx) { Fail 'Not logged in. Run `az login` (and `az account set --subscription <id>`).' }
 
 # --- derive names (platform naming convention) -----------------------------
-$rg = "rg-tfstate-$Environment-$RegionAbbrev-$Instance"
+$rg = "rg-tfstate-$Project-$Environment-$RegionAbbrev-$Instance"
 
 if (-not $StorageAccountName) {
     # Storage account names are GLOBALLY unique across all of Azure, so the
@@ -158,7 +170,7 @@ if (-not $StorageAccountName) {
     $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash(
         [System.Text.Encoding]::UTF8.GetBytes($ctx.id))
     $suffix = (-join ($hash[0..1] | ForEach-Object { $_.ToString('x2') }))  # 4 hex chars
-    $base = ("sttfstate$Environment$RegionAbbrev$Instance").ToLower() -replace '[^a-z0-9]', ''
+    $base = ("sttfstate$Project$Environment$RegionAbbrev$Instance").ToLower() -replace '[^a-z0-9]', ''
     # Keep the whole name <=24 chars; trim the base (not the suffix) if needed.
     $maxBase = 24 - $suffix.Length
     if ($base.Length -gt $maxBase) { $base = $base.Substring(0, $maxBase) }

@@ -4,7 +4,7 @@
 
 variable "resource_group_name" {
   type        = string
-  description = "Resource group for the storage account (e.g. rg-storage-dev-eus2-001)."
+  description = "Resource group for the storage account (e.g. rg-storage-dbx-dev-eus2-001)."
 }
 
 variable "location" {

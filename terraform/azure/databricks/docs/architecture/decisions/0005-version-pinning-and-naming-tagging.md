@@ -22,8 +22,8 @@ commit to concrete conventions before writing resources.
 - **azurerm 4.x note:** the provider requires an explicit `subscription_id`
   (sourced from a variable), and Key Vault uses `rbac_authorization_enabled` (the
   old `enable_rbac_authorization` is deprecated).
-- **Naming:** `{type}-{workload}-{env}-{region}-{instance}` everywhere, workload
-  `dbx` (or `hub` for shared-services), region **abbreviation used consistently in
+- **Naming:** `{type}-{project}-{env}-{region}-{instance}` everywhere, project token
+  from the per-root `project` variable (default `dbx`; hub resources add a `hub` function token), region **abbreviation used consistently in
   every name** (current region West US 3 → `wus3`; never the long `westus3`),
   instance `001`. Storage/Key Vault respect Azure length + character limits
   (storage `stdbxdevwus3001`, KV `kv-dbx-dev-wus3-001`).
@@ -47,4 +47,4 @@ commit to concrete conventions before writing resources.
 ## References
 
 - `docs/architecture/azure-platform-architecture.md` §2
-- `.claude/skills/azure-databricks-iac/references/terraform.md` §2–4
+- `.claude/skills/azure-databricks-author-review/references/terraform.md` §2–4

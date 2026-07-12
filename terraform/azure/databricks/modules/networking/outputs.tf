@@ -50,3 +50,8 @@ output "container_subnet_nsg_association_id" {
   description = "ID of the container subnet's NSG association (Databricks VNet injection needs this)."
   value       = azurerm_subnet_network_security_group_association.container.id
 }
+
+output "nat_gateway_public_ip" {
+  description = "Stable outbound public IP when NAT egress mode is enabled (null in firewall mode) — the auditable egress address."
+  value       = one(azurerm_public_ip.nat[*].ip_address)
+}

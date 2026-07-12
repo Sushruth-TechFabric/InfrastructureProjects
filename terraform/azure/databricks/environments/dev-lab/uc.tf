@@ -4,7 +4,9 @@
 # NO `databricks_metastore` HERE — on purpose. New Databricks accounts are
 # auto-enabled for Unity Catalog: a regional default metastore auto-attaches to
 # new workspaces. Managing one in Terraform would drag in the ACCOUNT-level
-# provider auth path for zero benefit in a solo lab.
+# provider auth path for zero benefit in a solo lab. (Since ADR-0011 that same
+# regional metastore IS Terraform-managed — in shared-services, named
+# mst-dbx-shared-wus3-001. Nothing changes here: auto-attach still applies.)
 #
 # PREFLIGHT (after phase-1 apply, before the full apply): open the workspace →
 # Catalog. If you see `main`/catalog browsing, the metastore is attached —
