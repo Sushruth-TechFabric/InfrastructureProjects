@@ -4,8 +4,10 @@
 # One state file per deployment boundary; this boundary's key is
 # "environments/dev/terraform.tfstate".
 #
-# The backend values are INTENTIONALLY NOT hardcoded here (E1, 2026-07-10
-# review): the storage account name is subscription-hashed by the bootstrap
+# The backend values are INTENTIONALLY NOT hardcoded here (E1 — hardcoded
+# backend block removed, subscription-hashed name must stay uncommitted; from
+# the uncommitted 2026-07-10 review): the storage account name is
+# subscription-hashed by the bootstrap
 # script, so it differs per subscription/deployer and must never be baked into
 # a file every clone of this repo shares.
 #

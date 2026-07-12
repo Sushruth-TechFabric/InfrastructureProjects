@@ -4,9 +4,10 @@
 # One state file per deployment boundary; this boundary's key is
 # "environments/staging/terraform.tfstate".
 #
-# Verbatim copy of the dev root's backend.tf pattern (E1/E7, 2026-07-10
-# review) — only the key differs. See environments/dev/backend.tf for the full
-# rationale.
+# Verbatim copy of the dev root's backend.tf pattern (E1 — partial backend
+# config, no hardcoded state names; E7 — new environments are verbatim copies
+# of dev; both from the uncommitted 2026-07-10 review) — only the key differs.
+# See environments/dev/backend.tf for the full rationale.
 #
 # Setup (once, per deployment boundary):
 #   1. ./scripts/bootstrap-tfstate.ps1 -Environment staging -Location westus3
