@@ -157,12 +157,19 @@ variable "databricks_account_id" {
   description = <<-EOT
     Databricks ACCOUNT id (the GUID shown at accounts.azuredatabricks.net).
     An identifier, not a secret — safe in tfvars. Used only by the
-    account-level provider for the identity layer.
+    account-level provider for the identity layer. MUST be IDENTICAL across
+    shared-services/environments-dev/environments-staging tfvars — they all
+    resolve to the same Databricks account.
   EOT
 
   validation {
     condition     = can(regex("^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$", lower(var.databricks_account_id)))
     error_message = "databricks_account_id must be a GUID (find it at accounts.azuredatabricks.net)."
+  }
+
+  validation {
+    condition     = lower(var.databricks_account_id) != "00000000-0000-0000-0000-000000000000"
+    error_message = "databricks_account_id is still the all-zeros placeholder — set your real Databricks account GUID (find it at accounts.azuredatabricks.net, top-right) before planning."
   }
 }
 

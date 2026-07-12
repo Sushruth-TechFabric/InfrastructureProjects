@@ -24,7 +24,7 @@ deploy_firewall = false
 # ADR-0011: account id for the UC metastore's account-level provider. An
 # identifier, not a secret — same value as environments/dev/terraform.tfvars
 # (found at accounts.azuredatabricks.net; deployer must be an ACCOUNT admin).
-databricks_account_id = "00000000-0000-0000-0000-000000000000" # TODO: set your Databricks account GUID
+databricks_account_id = "00000000-0000-0000-0000-000000000000" # REQUIRED before deploy: your Databricks account ID from accounts.azuredatabricks.net (top-right) — plan fails until set. Must be IDENTICAL across shared-services/dev/staging.
 
 # ADR-0011 follow-up, resolved: metastore owner is a platform-admin ACCOUNT
 # GROUP, never the applying individual (rule 10). grp-dbx-dev-admins is the
